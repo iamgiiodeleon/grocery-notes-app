@@ -397,10 +397,11 @@ const GroceryNotes = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => parseAndAddItem('milk 85')}
+                onClick={() => parseAndAddItem(transcript || 'milk 85')}
                 className="mt-2"
+                disabled={!transcript && !currentNote}
               >
-                Test Add "milk 85"
+                {transcript ? `Test Add "${transcript}"` : 'Test Add "milk 85"'}
               </Button>
             )}
           </div>
