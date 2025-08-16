@@ -372,7 +372,7 @@ const GroceryNotes = () => {
 
         {/* Items List */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {!currentNote?.items.length ? (
+          {!currentNote?.items?.length ? (
             <div className="p-8 text-center">
               <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">No items yet</p>
@@ -409,6 +409,17 @@ const GroceryNotes = () => {
             </div>
           )}
         </div>
+
+        {/* Debug Info - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-yellow-50 rounded-2xl p-4 text-xs">
+            <p><strong>Debug Info:</strong></p>
+            <p>Current Note ID: {currentNote?.id}</p>
+            <p>Items Count: {currentNote?.items?.length || 0}</p>
+            <p>Last Transcript: {transcript}</p>
+            <p>Total Notes: {notes.length}</p>
+          </div>
+        )}
       </div>
     </div>
   );
