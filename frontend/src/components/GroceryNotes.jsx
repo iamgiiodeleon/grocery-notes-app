@@ -367,6 +367,18 @@ const GroceryNotes = () => {
                 <p className="text-sm font-medium text-blue-800">{transcript}</p>
               </div>
             )}
+
+            {/* Test button for debugging */}
+            {process.env.NODE_ENV === 'development' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => parseAndAddItem('milk 85')}
+                className="mt-2"
+              >
+                Test Add "milk 85"
+              </Button>
+            )}
           </div>
         </div>
 
