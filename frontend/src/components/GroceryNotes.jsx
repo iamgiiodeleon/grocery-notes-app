@@ -69,7 +69,8 @@ const GroceryNotes = () => {
   const parseAndAddItem = (text) => {
     if (!currentNote) return;
 
-    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos)?$/i;
+    // More flexible regex to catch different formats
+    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
     const match = text.match(regex);
     
     if (match) {
@@ -83,21 +84,21 @@ const GroceryNotes = () => {
         timestamp: new Date().toLocaleTimeString()
       };
       
-      setNotes(prevNotes => 
-        prevNotes.map(note => 
-          note.id === currentNote.id 
-            ? { ...note, items: [...note.items, newItem] }
-            : note
-        )
+      // Update notes state first
+      const updatedNotes = notes.map(note => 
+        note.id === currentNote.id 
+          ? { ...note, items: [...note.items, newItem], lastModified: new Date().toLocaleString() }
+          : note
       );
+      
+      setNotes(updatedNotes);
 
-      setCurrentNote(prev => ({
-        ...prev,
-        items: [...prev.items, newItem]
-      }));
+      // Update current note to match
+      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+      setCurrentNote(updatedCurrentNote);
       
       toast({
-        title: "Added",
+        title: "Added ✅",
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
     } else {
