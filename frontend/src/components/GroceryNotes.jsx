@@ -290,6 +290,7 @@ const GroceryNotes = () => {
             variant="ghost"
             onClick={() => setCurrentView('notes')}
             className="rounded-full p-2"
+            title="Back to notes"
           >
             <ArrowLeft className="h-6 w-6" />
           </Button>
