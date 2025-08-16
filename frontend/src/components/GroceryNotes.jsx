@@ -315,8 +315,8 @@ const GroceryNotes = () => {
               size="lg"
               className={`w-20 h-20 rounded-full transition-all duration-200 ${
                 isRecording 
-                  ? 'bg-red-500 hover:bg-red-600 scale-110' 
-                  : 'bg-blue-500 hover:bg-blue-600'
+                  ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-200' 
+                  : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
               }`}
               onClick={isRecording ? stopRecording : startRecording}
             >
@@ -329,16 +329,22 @@ const GroceryNotes = () => {
             
             <div>
               {isRecording ? (
-                <p className="text-red-600 font-medium">Listening...</p>
+                <div className="space-y-1">
+                  <p className="text-red-600 font-medium">🎤 Listening...</p>
+                  <p className="text-xs text-red-400">Tap again to stop</p>
+                </div>
               ) : (
-                <p className="text-gray-600">Tap to add item</p>
+                <div className="space-y-1">
+                  <p className="text-gray-600">Tap to add item</p>
+                  <p className="text-xs text-gray-400">Say "item name price"</p>
+                </div>
               )}
-              <p className="text-xs text-gray-400 mt-1">Say "item name price"</p>
             </div>
 
             {transcript && (
-              <div className="bg-gray-50 p-3 rounded-xl">
-                <p className="text-sm font-medium text-gray-700">{transcript}</p>
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+                <p className="text-xs text-blue-600 mb-1">You said:</p>
+                <p className="text-sm font-medium text-blue-800">{transcript}</p>
               </div>
             )}
           </div>
