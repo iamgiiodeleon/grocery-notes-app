@@ -149,7 +149,10 @@ const GroceryNotes = () => {
   };
 
   const openNote = (note) => {
-    setCurrentNote(note);
+    console.log("Opening note:", note);
+    // Ensure we get the latest version of the note from the notes array
+    const latestNote = notes.find(n => n.id === note.id) || note;
+    setCurrentNote(latestNote);
     setCurrentView('recording');
   };
 
