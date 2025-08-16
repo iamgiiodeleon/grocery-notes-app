@@ -78,6 +78,11 @@ const GroceryNotes = () => {
   const parseAndAddItem = (text) => {
     if (!currentNote) {
       console.log("No current note selected");
+      toast({
+        title: "Error",
+        description: "No grocery list selected",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -94,24 +99,31 @@ const GroceryNotes = () => {
       console.log("Parsed item:", itemName, "Price:", price);
       
       const newItem = {
-        id: Date.now(),
+        id: Date.now() + Math.random(), // Ensure unique ID
         name: itemName,
         price: price,
         timestamp: new Date().toLocaleTimeString()
       };
       
+      console.log("Adding new item:", newItem);
+      
       // Update notes state using callback to ensure we have latest state
       setNotes(prevNotes => {
         const updatedNotes = prevNotes.map(note => 
           note.id === currentNote.id 
-            ? { ...note, items: [...(note.items || []), newItem], lastModified: new Date().toLocaleString() }
+            ? { 
+                ...note, 
+                items: [...(note.items || []), newItem], 
+                lastModified: new Date().toLocaleString() 
+              }
             : note
         );
         
-        console.log("Updated notes:", updatedNotes);
+        console.log("Updated notes array:", updatedNotes);
         
-        // Update current note to match the updated note
+        // Also update current note immediately
         const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+        console.log("Updated current note:", updatedCurrentNote);
         setCurrentNote(updatedCurrentNote);
         
         return updatedNotes;
@@ -121,11 +133,17 @@ const GroceryNotes = () => {
         title: "Added ✅",
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
+      
+      // Force a re-render by clearing and setting transcript
+      setTimeout(() => {
+        setTranscript('');
+      }, 2000);
+      
     } else {
-      console.log("Failed to parse:", text);
+      console.log("Failed to parse:", text, "Regex match:", match);
       toast({
-        title: "Try Again",
-        description: "Say item name and price (e.g., 'milk 85')",
+        title: "Not Recognized",
+        description: `Heard: "${text}". Try "item name price" format.`,
         variant: "destructive"
       });
     }
