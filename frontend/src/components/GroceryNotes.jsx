@@ -43,10 +43,10 @@ const GroceryNotes = () => {
         console.log("Speech recognized:", speechText);
         setTranscript(speechText);
         
-        // Immediately try to parse and add the item
+        // Automatically parse and add the item when speech is recognized
         parseAndAddItem(speechText);
         
-        // Also show a processing message
+        // Show processing message
         toast({
           title: "Processing...",
           description: `Heard: "${speechText}"`,
