@@ -40,8 +40,12 @@ const GroceryNotes = () => {
 
       recognitionRef.current.onresult = (event) => {
         const speechText = event.results[0][0].transcript;
+        console.log("Speech recognized:", speechText);
         setTranscript(speechText);
-        parseAndAddItem(speechText);
+        // Add small delay to ensure transcript is set before parsing
+        setTimeout(() => {
+          parseAndAddItem(speechText);
+        }, 100);
       };
 
       recognitionRef.current.onend = () => {
