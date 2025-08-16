@@ -355,23 +355,25 @@ const GroceryNotes = () => {
           ) : (
             <div className="divide-y divide-gray-100">
               {currentNote.items.map((item, index) => (
-                <div key={item.id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div key={item.id} className="p-4 flex items-center justify-between group">
+                  <div className="flex items-center space-x-3 flex-1">
                     <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
                       {index + 1}
                     </Badge>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-gray-900 capitalize">{item.name}</p>
                       <p className="text-xs text-gray-500">{item.timestamp}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <span className="font-semibold text-gray-900">₱{item.price.toFixed(2)}</span>
+                    {/* Easy remove button - always visible */}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => removeItem(item.id)}
-                      className="text-red-500 hover:text-red-700 rounded-lg p-1"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-8 h-8 p-0 flex items-center justify-center"
+                      title="Remove item"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
