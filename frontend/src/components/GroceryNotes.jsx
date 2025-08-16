@@ -2,35 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
-import { Mic, MicOff, Trash2, ShoppingCart } from 'lucide-react';
+import { Input } from './ui/input';
+import { Mic, MicOff, Plus, ArrowLeft, Trash2, ShoppingCart, FileText, Calendar } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 
 const GroceryNotes = () => {
+  const [currentView, setCurrentView] = useState('notes'); // 'notes' or 'recording'
+  const [notes, setNotes] = useState([]);
+  const [currentNote, setCurrentNote] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [items, setItems] = useState([]);
-  const [totalPrice, setTotalPrice] = useState(0);
   const [transcript, setTranscript] = useState('');
+  const [newNoteName, setNewNoteName] = useState('');
   const recognitionRef = useRef(null);
   const { toast } = useToast();
 
-  // Load items from localStorage on component mount
+  // Load notes from localStorage on component mount
   useEffect(() => {
-    const savedItems = localStorage.getItem('groceryItems');
-    if (savedItems) {
-      const parsedItems = JSON.parse(savedItems);
-      setItems(parsedItems);
-      const total = parsedItems.reduce((sum, item) => sum + item.price, 0);
-      setTotalPrice(total);
+    const savedNotes = localStorage.getItem('groceryNotes');
+    if (savedNotes) {
+      setNotes(JSON.parse(savedNotes));
     }
   }, []);
 
-  // Save items to localStorage whenever items change
+  // Save notes to localStorage whenever notes change
   useEffect(() => {
-    localStorage.setItem('groceryItems', JSON.stringify(items));
-    const total = items.reduce((sum, item) => sum + item.price, 0);
-    setTotalPrice(total);
-  }, [items]);
+    localStorage.setItem('groceryNotes', JSON.stringify(notes));
+  }, [notes]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -60,12 +57,6 @@ const GroceryNotes = () => {
           variant: "destructive"
         });
       };
-    } else {
-      toast({
-        title: "Not Supported",
-        description: "Speech recognition is not supported in this browser.",
-        variant: "destructive"
-      });
     }
 
     return () => {
@@ -76,7 +67,8 @@ const GroceryNotes = () => {
   }, [toast]);
 
   const parseAndAddItem = (text) => {
-    // Parse text like "shampoo 100php" or "shampoo 100"
+    if (!currentNote) return;
+
     const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos)?$/i;
     const match = text.match(regex);
     
@@ -91,18 +83,73 @@ const GroceryNotes = () => {
         timestamp: new Date().toLocaleTimeString()
       };
       
-      setItems(prevItems => [...prevItems, newItem]);
+      setNotes(prevNotes => 
+        prevNotes.map(note => 
+          note.id === currentNote.id 
+            ? { ...note, items: [...note.items, newItem] }
+            : note
+        )
+      );
+
+      setCurrentNote(prev => ({
+        ...prev,
+        items: [...prev.items, newItem]
+      }));
+      
       toast({
-        title: "Item Added",
+        title: "Added",
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
     } else {
       toast({
-        title: "Unable to Parse",
-        description: "Please say item name followed by price (e.g., 'shampoo 100')",
+        title: "Try Again",
+        description: "Say item name and price (e.g., 'milk 85')",
         variant: "destructive"
       });
     }
+  };
+
+  const createNewNote = () => {
+    if (!newNoteName.trim()) {
+      toast({
+        title: "Name Required",
+        description: "Please enter a name for your grocery list",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newNote = {
+      id: Date.now(),
+      name: newNoteName.trim(),
+      items: [],
+      createdAt: new Date().toLocaleDateString(),
+      lastModified: new Date().toLocaleString()
+    };
+
+    setNotes(prev => [newNote, ...prev]);
+    setNewNoteName('');
+    toast({
+      title: "Created",
+      description: `"${newNote.name}" grocery list created`,
+    });
+  };
+
+  const openNote = (note) => {
+    setCurrentNote(note);
+    setCurrentView('recording');
+  };
+
+  const deleteNote = (noteId) => {
+    setNotes(prev => prev.filter(note => note.id !== noteId));
+    if (currentNote && currentNote.id === noteId) {
+      setCurrentNote(null);
+      setCurrentView('notes');
+    }
+    toast({
+      title: "Deleted",
+      description: "Grocery list has been deleted",
+    });
   };
 
   const startRecording = () => {
@@ -110,10 +157,6 @@ const GroceryNotes = () => {
       setIsRecording(true);
       setTranscript('');
       recognitionRef.current.start();
-      toast({
-        title: "Listening...",
-        description: "Say item name and price (e.g., 'shampoo 100php')",
-      });
     }
   };
 
@@ -124,155 +167,215 @@ const GroceryNotes = () => {
     }
   };
 
-  const clearAllItems = () => {
-    setItems([]);
-    setTotalPrice(0);
-    localStorage.removeItem('groceryItems');
-    toast({
-      title: "Cleared",
-      description: "All items have been removed.",
-    });
+  const removeItem = (itemId) => {
+    setNotes(prevNotes => 
+      prevNotes.map(note => 
+        note.id === currentNote.id 
+          ? { ...note, items: note.items.filter(item => item.id !== itemId) }
+          : note
+      )
+    );
+
+    setCurrentNote(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== itemId)
+    }));
   };
 
-  const removeItem = (id) => {
-    setItems(prevItems => prevItems.filter(item => item.id !== id));
-    toast({
-      title: "Item Removed",
-      description: "Item has been deleted from your list.",
-    });
+  const getTotalPrice = (items) => {
+    return items.reduce((sum, item) => sum + item.price, 0);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <div className="max-w-md mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center py-6">
-          <div className="flex items-center justify-center mb-3">
-            <ShoppingCart className="h-8 w-8 text-green-600 mr-2" />
-            <h1 className="text-3xl font-bold text-gray-800">Grocery Notes</h1>
+  if (currentView === 'notes') {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* Header */}
+          <div className="text-center py-8">
+            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Grocery Notes</h1>
+            <p className="text-gray-600 text-sm">Voice-powered shopping lists</p>
           </div>
-          <p className="text-gray-600">Voice-powered grocery list</p>
-        </div>
 
-        {/* Voice Recording Section */}
-        <Card className="shadow-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="text-lg">Add New Item</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Recording Button */}
-            <div className="flex justify-center">
-              <Button
-                size="lg"
-                className={`w-24 h-24 rounded-full transition-all duration-300 ${
-                  isRecording 
-                    ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                    : 'bg-green-500 hover:bg-green-600'
-                }`}
-                onClick={isRecording ? stopRecording : startRecording}
-              >
-                {isRecording ? (
-                  <MicOff className="h-8 w-8" />
-                ) : (
-                  <Mic className="h-8 w-8" />
-                )}
-              </Button>
-            </div>
-            
-            {/* Recording Status */}
-            <div className="text-center">
-              {isRecording ? (
-                <p className="text-red-600 font-medium">🎤 Listening... Tap to stop</p>
-              ) : (
-                <p className="text-gray-600">Tap to record item and price</p>
-              )}
-            </div>
-
-            {/* Last Transcript */}
-            {transcript && (
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-600">Last heard:</p>
-                <p className="font-medium">{transcript}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Total Price Display */}
-        <Card className="shadow-lg bg-gradient-to-r from-blue-500 to-green-500 text-white">
-          <CardContent className="text-center py-6">
-            <h2 className="text-2xl font-bold mb-2">Total Amount</h2>
-            <p className="text-4xl font-bold">₱{totalPrice.toFixed(2)}</p>
-            <p className="text-blue-100 mt-1">{items.length} items</p>
-          </CardContent>
-        </Card>
-
-        {/* Items List */}
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Grocery Items</CardTitle>
-            {items.length > 0 && (
+          {/* Create New Note */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">New List</h3>
+            <div className="space-y-3">
+              <Input
+                placeholder="e.g., Weekly Groceries"
+                value={newNoteName}
+                onChange={(e) => setNewNoteName(e.target.value)}
+                className="rounded-xl border-gray-200 bg-gray-50"
+                onKeyPress={(e) => e.key === 'Enter' && createNewNote()}
+              />
               <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={clearAllItems}
-                className="text-red-600 hover:text-red-700"
+                onClick={createNewNote}
+                className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 h-12"
               >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear All
+                <Plus className="h-5 w-5 mr-2" />
+                Create List
               </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {items.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <ShoppingCart className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p>No items yet</p>
-                <p className="text-sm">Start recording to add items</p>
+            </div>
+          </div>
+
+          {/* Notes List */}
+          <div className="space-y-3">
+            {notes.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No grocery lists yet</p>
+                <p className="text-gray-400 text-sm mt-1">Create your first list above</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {items.map((item, index) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {index + 1}
-                        </Badge>
-                        <span className="font-medium capitalize">{item.name}</span>
+              notes.map((note) => (
+                <div key={note.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div 
+                    className="p-6 cursor-pointer active:bg-gray-50 transition-colors"
+                    onClick={() => openNote(note)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate">{note.name}</h3>
+                        <div className="flex items-center space-x-4 mt-2">
+                          <div className="flex items-center text-sm text-gray-500">
+                            <ShoppingCart className="h-4 w-4 mr-1" />
+                            {note.items.length} items
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Calendar className="h-4 w-4 mr-1" />
+                            {note.createdAt}
+                          </div>
+                        </div>
+                        {note.items.length > 0 && (
+                          <div className="mt-3">
+                            <span className="text-lg font-semibold text-green-600">
+                              ₱{getTotalPrice(note.items).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">{item.timestamp}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-green-600">₱{item.price.toFixed(2)}</span>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeItem(item.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNote(note.id);
+                        }}
+                        className="text-red-500 hover:text-red-700 rounded-lg"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Recording View
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-md mx-auto space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between py-4">
+          <Button
+            variant="ghost"
+            onClick={() => setCurrentView('notes')}
+            className="rounded-full p-2"
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+          <div className="text-center flex-1">
+            <h1 className="text-lg font-semibold text-gray-900">{currentNote?.name}</h1>
+            <p className="text-sm text-gray-500">{currentNote?.items.length} items</p>
+          </div>
+          <div className="w-10" />
+        </div>
+
+        {/* Total Amount */}
+        <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
+          <p className="text-sm text-gray-500 mb-1">Total Amount</p>
+          <p className="text-3xl font-bold text-gray-900">
+            ₱{getTotalPrice(currentNote?.items || []).toFixed(2)}
+          </p>
+        </div>
+
+        {/* Voice Recording */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <div className="text-center space-y-4">
+            <Button
+              size="lg"
+              className={`w-20 h-20 rounded-full transition-all duration-200 ${
+                isRecording 
+                  ? 'bg-red-500 hover:bg-red-600 scale-110' 
+                  : 'bg-blue-500 hover:bg-blue-600'
+              }`}
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? (
+                <MicOff className="h-8 w-8" />
+              ) : (
+                <Mic className="h-8 w-8" />
+              )}
+            </Button>
+            
+            <div>
+              {isRecording ? (
+                <p className="text-red-600 font-medium">Listening...</p>
+              ) : (
+                <p className="text-gray-600">Tap to add item</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">Say "item name price"</p>
+            </div>
+
+            {transcript && (
+              <div className="bg-gray-50 p-3 rounded-xl">
+                <p className="text-sm font-medium text-gray-700">{transcript}</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Instructions */}
-        <Card className="shadow-lg bg-amber-50 border-amber-200">
-          <CardContent className="pt-6">
-            <h3 className="font-semibold text-amber-800 mb-2">How to Use:</h3>
-            <ul className="text-sm text-amber-700 space-y-1">
-              <li>• Tap the microphone button</li>
-              <li>• Say item name and price (e.g., "shampoo 100")</li>
-              <li>• The app will automatically parse and add to your list</li>
-              <li>• Running total is calculated automatically</li>
-            </ul>
-          </CardContent>
-        </Card>
+        {/* Items List */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {!currentNote?.items.length ? (
+            <div className="p-8 text-center">
+              <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No items yet</p>
+              <p className="text-gray-400 text-sm mt-1">Start recording to add items</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {currentNote.items.map((item, index) => (
+                <div key={item.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
+                      {index + 1}
+                    </Badge>
+                    <div>
+                      <p className="font-medium text-gray-900 capitalize">{item.name}</p>
+                      <p className="text-xs text-gray-500">{item.timestamp}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-semibold text-gray-900">₱{item.price.toFixed(2)}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItem(item.id)}
+                      className="text-red-500 hover:text-red-700 rounded-lg p-1"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
