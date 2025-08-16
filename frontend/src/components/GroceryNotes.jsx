@@ -67,8 +67,13 @@ const GroceryNotes = () => {
   }, [toast]);
 
   const parseAndAddItem = (text) => {
-    if (!currentNote) return;
+    if (!currentNote) {
+      console.log("No current note selected");
+      return;
+    }
 
+    console.log("Parsing text:", text);
+    
     // More flexible regex to catch different formats
     const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
     const match = text.match(regex);
@@ -77,6 +82,8 @@ const GroceryNotes = () => {
       const itemName = match[1].trim();
       const price = parseFloat(match[2]);
       
+      console.log("Parsed item:", itemName, "Price:", price);
+      
       const newItem = {
         id: Date.now(),
         name: itemName,
@@ -84,24 +91,29 @@ const GroceryNotes = () => {
         timestamp: new Date().toLocaleTimeString()
       };
       
-      // Update notes state first
-      const updatedNotes = notes.map(note => 
-        note.id === currentNote.id 
-          ? { ...note, items: [...note.items, newItem], lastModified: new Date().toLocaleString() }
-          : note
-      );
-      
-      setNotes(updatedNotes);
-
-      // Update current note to match
-      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
-      setCurrentNote(updatedCurrentNote);
+      // Update notes state using callback to ensure we have latest state
+      setNotes(prevNotes => {
+        const updatedNotes = prevNotes.map(note => 
+          note.id === currentNote.id 
+            ? { ...note, items: [...(note.items || []), newItem], lastModified: new Date().toLocaleString() }
+            : note
+        );
+        
+        console.log("Updated notes:", updatedNotes);
+        
+        // Update current note to match the updated note
+        const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+        setCurrentNote(updatedCurrentNote);
+        
+        return updatedNotes;
+      });
       
       toast({
         title: "Added ✅",
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
     } else {
+      console.log("Failed to parse:", text);
       toast({
         title: "Try Again",
         description: "Say item name and price (e.g., 'milk 85')",
