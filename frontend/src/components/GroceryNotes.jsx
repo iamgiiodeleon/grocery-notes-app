@@ -447,12 +447,21 @@ const GroceryNotes = () => {
 
         {/* Debug Info - Remove in production */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="bg-yellow-50 rounded-2xl p-4 text-xs">
+          <div className="bg-yellow-50 rounded-2xl p-4 text-xs space-y-1">
             <p><strong>Debug Info:</strong></p>
             <p>Current Note ID: {currentNote?.id}</p>
             <p>Items Count: {currentNote?.items?.length || 0}</p>
-            <p>Last Transcript: {transcript}</p>
+            <p>Last Transcript: "{transcript}"</p>
             <p>Total Notes: {notes.length}</p>
+            <p>Recording: {isRecording ? 'YES' : 'NO'}</p>
+            {currentNote?.items?.length > 0 && (
+              <div>
+                <p><strong>Items:</strong></p>
+                {currentNote.items.map((item, idx) => (
+                  <p key={item.id}>• {item.name} - ₱{item.price}</p>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
