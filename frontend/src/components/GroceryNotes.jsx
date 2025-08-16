@@ -389,7 +389,7 @@ const GroceryNotes = () => {
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
                 <p className="text-xs text-blue-600 mb-1">You said:</p>
                 <p className="text-sm font-medium text-blue-800">"{transcript}"</p>
-                <p className="text-xs text-blue-500 mt-1">Processing...</p>
+                <p className="text-xs text-blue-500 mt-1">Click test button to add this item</p>
               </div>
             )}
 
