@@ -134,9 +134,10 @@ const GroceryNotes = () => {
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
       
-      // Force a re-render by clearing and setting transcript
+      // Force a re-render and keep transcript visible for manual button use
       setTimeout(() => {
-        setTranscript('');
+        // Don't clear transcript immediately so user can see it and use test button
+        // setTranscript('');
       }, 2000);
       
     } else {
