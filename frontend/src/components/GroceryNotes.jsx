@@ -199,8 +199,12 @@ const GroceryNotes = () => {
   const startRecording = () => {
     if (recognitionRef.current && !isRecording) {
       setIsRecording(true);
-      setTranscript('');
+      setTranscript(''); // Clear previous transcript
       recognitionRef.current.start();
+      toast({
+        title: "Listening...",
+        description: "Say item name and price (e.g., 'coke 100')",
+      });
     }
   };
 
