@@ -169,18 +169,22 @@ const GroceryNotes = () => {
   };
 
   const removeItem = (itemId) => {
-    setNotes(prevNotes => 
-      prevNotes.map(note => 
-        note.id === currentNote.id 
-          ? { ...note, items: note.items.filter(item => item.id !== itemId) }
-          : note
-      )
+    const updatedNotes = notes.map(note => 
+      note.id === currentNote.id 
+        ? { ...note, items: note.items.filter(item => item.id !== itemId), lastModified: new Date().toLocaleString() }
+        : note
     );
+    
+    setNotes(updatedNotes);
 
-    setCurrentNote(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== itemId)
-    }));
+    // Update current note to match
+    const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+    setCurrentNote(updatedCurrentNote);
+    
+    toast({
+      title: "Removed",
+      description: "Item deleted from list",
+    });
   };
 
   const getTotalPrice = (items) => {
