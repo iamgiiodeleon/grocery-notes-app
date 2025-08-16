@@ -39,13 +39,18 @@ const GroceryNotes = () => {
       recognitionRef.current.lang = 'en-US';
 
       recognitionRef.current.onresult = (event) => {
-        const speechText = event.results[0][0].transcript;
+        const speechText = event.results[0][0].transcript.toLowerCase().trim();
         console.log("Speech recognized:", speechText);
         setTranscript(speechText);
-        // Add small delay to ensure transcript is set before parsing
-        setTimeout(() => {
-          parseAndAddItem(speechText);
-        }, 100);
+        
+        // Immediately try to parse and add the item
+        parseAndAddItem(speechText);
+        
+        // Also show a processing message
+        toast({
+          title: "Processing...",
+          description: `Heard: "${speechText}"`,
+        });
       };
 
       recognitionRef.current.onend = () => {
