@@ -60,6 +60,13 @@ const GroceryNotes = () => {
           recognitionRef.current.interimResults = false;
           recognitionRef.current.lang = 'en-US';
 
+          // iOS Safari specific settings
+          if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+            console.log('iOS device detected, applying specific settings');
+            recognitionRef.current.maxAlternatives = 1;
+            recognitionRef.current.continuous = false;
+          }
+
           // Request microphone permission proactively
           try {
             if (navigator.permissions && navigator.permissions.query) {
@@ -105,12 +112,43 @@ const GroceryNotes = () => {
             if (event.error === 'not-allowed') {
               console.log('Microphone permission not granted');
               setMicPermission('denied');
+            } else if (event.error === 'no-speech') {
+              console.log('No speech detected');
+            } else if (event.error === 'audio-capture') {
+              console.log('Audio capture error - likely permission issue');
+              setMicPermission('denied');
+            } else if (event.error === 'network') {
+              console.log('Network error');
             }
           };
 
           recognitionRef.current.onstart = () => {
             console.log('Speech recognition started');
             setMicPermission('granted'); // Update permission state when recording starts
+          };
+
+          recognitionRef.current.onaudiostart = () => {
+            console.log('Audio capturing started');
+          };
+
+          recognitionRef.current.onaudioend = () => {
+            console.log('Audio capturing ended');
+          };
+
+          recognitionRef.current.onsoundstart = () => {
+            console.log('Sound detected');
+          };
+
+          recognitionRef.current.onsoundend = () => {
+            console.log('Sound ended');
+          };
+
+          recognitionRef.current.onspeechstart = () => {
+            console.log('Speech started');
+          };
+
+          recognitionRef.current.onspeechend = () => {
+            console.log('Speech ended');
           };
         } else {
           console.log("Speech recognition not supported in this browser");
@@ -193,8 +231,36 @@ const GroceryNotes = () => {
       setTranscript(''); // Clear previous transcript
       
       try {
-        recognitionRef.current.start();
-        console.log('Starting speech recognition...');
+        // iOS Safari specific handling
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+          console.log('Starting speech recognition on iOS...');
+          
+          // Try to start with a small delay for iOS
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start();
+              console.log('iOS speech recognition started successfully');
+            } catch (iosError) {
+              console.error('iOS speech recognition error:', iosError);
+              setIsRecording(false);
+              
+              if (iosError.name === 'NotAllowedError') {
+                console.log('iOS microphone permission denied');
+                setMicPermission('denied');
+                alert('Please allow microphone access in your iPhone settings. Go to Settings > Safari > Microphone and enable it.');
+              } else if (iosError.name === 'NotSupportedError') {
+                console.log('Speech recognition not supported on this iOS version');
+                alert('Speech recognition is not supported on your iOS version. Please use manual input instead.');
+              } else {
+                alert('Speech recognition failed. Please try again or use manual input.');
+              }
+            }
+          }, 100);
+        } else {
+          // Non-iOS devices
+          recognitionRef.current.start();
+          console.log('Starting speech recognition...');
+        }
       } catch (error) {
         console.error('Error starting speech recognition:', error);
         setIsRecording(false);
@@ -202,8 +268,17 @@ const GroceryNotes = () => {
         // If permission is denied, try to request it
         if (error.name === 'NotAllowedError') {
           console.log('Microphone permission denied, attempting to request...');
-          // On mobile, this will trigger the permission request
-          // The user will see the browser's permission dialog
+          setMicPermission('denied');
+          
+          if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+            alert('Please allow microphone access in your iPhone settings. Go to Settings > Safari > Microphone and enable it.');
+          } else {
+            alert('Microphone permission denied. Please allow microphone access in your browser settings.');
+          }
+        } else if (error.name === 'NotSupportedError') {
+          alert('Speech recognition is not supported in your browser. Please use manual input instead.');
+        } else {
+          alert('Speech recognition failed. Please try again or use manual input.');
         }
       }
     }
@@ -508,11 +583,19 @@ const GroceryNotes = () => {
               ) : micPermission === 'denied' ? (
                 <div className="space-y-1">
                   <p className="text-gray-500 font-medium text-lg">Microphone blocked</p>
-                  <p className="text-xs text-gray-400">Enable in browser settings</p>
+                  <p className="text-xs text-gray-400">
+                    {/iPad|iPhone|iPod/.test(navigator.userAgent) 
+                      ? 'Enable in iPhone Settings → Safari → Microphone' 
+                      : 'Enable in browser settings'
+                    }
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-1">
                   <p className="text-gray-600">Tap to add item</p>
+                  {/iPad|iPhone|iPod/.test(navigator.userAgent) && (
+                    <p className="text-xs text-gray-400">Say "item name price"</p>
+                  )}
                 </div>
               )}
             </div>
@@ -532,23 +615,33 @@ const GroceryNotes = () => {
 
             {/* Permission Request Button */}
             {micPermission === 'denied' && (
-              <button 
-                onClick={() => {
-                  // Try to start recording to trigger permission request
-                  if (recognitionRef.current) {
-                    try {
-                      recognitionRef.current.start();
-                      recognitionRef.current.stop();
-                      setMicPermission('prompt');
-                    } catch (error) {
-                      console.log('Permission request failed:', error);
+              <div className="space-y-2">
+                <button 
+                  onClick={() => {
+                    // Try to start recording to trigger permission request
+                    if (recognitionRef.current) {
+                      try {
+                        recognitionRef.current.start();
+                        recognitionRef.current.stop();
+                        setMicPermission('prompt');
+                      } catch (error) {
+                        console.log('Permission request failed:', error);
+                      }
                     }
-                  }
-                }}
-                className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors"
-              >
-                Request Microphone Permission
-              </button>
+                  }}
+                  className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors"
+                >
+                  Request Microphone Permission
+                </button>
+                
+                {/iPad|iPhone|iPod/.test(navigator.userAgent) && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
+                    <p className="font-medium mb-1">iPhone Users:</p>
+                    <p>If permission is still denied, go to:</p>
+                    <p className="font-mono text-xs mt-1">Settings → Safari → Microphone → Allow</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
