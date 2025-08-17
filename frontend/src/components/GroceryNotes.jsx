@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const GroceryNotes = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -9,6 +9,9 @@ const GroceryNotes = () => {
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [manualItemName, setManualItemName] = useState('');
   const [manualItemPrice, setManualItemPrice] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     // Load notes from localStorage
@@ -29,6 +32,131 @@ const GroceryNotes = () => {
   useEffect(() => {
     localStorage.setItem('groceryNotes', JSON.stringify(notes));
   }, [notes]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    try {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
+
+        recognitionRef.current.onresult = (event) => {
+          const speechText = event.results[0][0].transcript.toLowerCase().trim();
+          console.log("Speech recognized:", speechText);
+          setTranscript(speechText);
+          
+          // Automatically parse and add the item when speech is recognized
+          parseAndAddItem(speechText);
+          
+          // Show processing message
+          alert(`Heard: "${speechText}"`);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsRecording(false);
+        };
+
+        recognitionRef.current.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+          alert("Speech recognition failed. Please try again.");
+        };
+      } else {
+        console.log("Speech recognition not supported in this browser");
+        alert("Voice features not supported in this browser. You can still add items manually.");
+      }
+    } catch (error) {
+      console.error("Error initializing speech recognition:", error);
+      alert("Some features may not work properly. You can still add items manually.");
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const parseAndAddItem = (text) => {
+    if (!currentNote) {
+      alert('No grocery list selected');
+      return;
+    }
+
+    console.log("Parsing text:", text);
+    
+    // More flexible regex to catch different formats
+    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
+    const match = text.match(regex);
+    
+    if (match) {
+      const itemName = match[1].trim();
+      const price = parseFloat(match[2]);
+      
+      console.log("Parsed item:", itemName, "Price:", price);
+      
+      const newItem = {
+        id: Date.now() + Math.random(),
+        name: itemName,
+        price: price,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      console.log("Adding new item:", newItem);
+      
+      // Update notes state using callback to ensure we have latest state
+      setNotes(prevNotes => {
+        const updatedNotes = prevNotes.map(note => 
+          note.id === currentNote.id 
+            ? { 
+                ...note, 
+                items: [...(note.items || []), newItem], 
+                lastModified: new Date().toLocaleString() 
+              }
+            : note
+        );
+        
+        console.log("Updated notes array:", updatedNotes);
+        
+        // Also update current note immediately
+        const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+        console.log("Updated current note:", updatedCurrentNote);
+        setCurrentNote(updatedCurrentNote);
+        
+        return updatedNotes;
+      });
+      
+      alert(`Added: ${itemName} - ₱${price.toFixed(2)}`);
+      
+      // Clear transcript after successful addition
+      setTimeout(() => {
+        setTranscript('');
+      }, 1000);
+      
+    } else {
+      console.log("Failed to parse:", text, "Regex match:", match);
+      alert(`Heard: "${text}". Try "item name price" format.`);
+    }
+  };
+
+  const startRecording = () => {
+    if (recognitionRef.current && !isRecording) {
+      setIsRecording(true);
+      setTranscript(''); // Clear previous transcript
+      recognitionRef.current.start();
+      alert("Listening... Say item name and price (e.g., 'coke 100')");
+    }
+  };
+
+  const stopRecording = () => {
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
 
   const createNewNote = () => {
     if (!newNoteName.trim()) {
@@ -273,10 +401,52 @@ const GroceryNotes = () => {
           </p>
         </div>
 
+        {/* Voice Recording */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg border border-white/20">
+          <div className="text-center space-y-4">
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 ${
+                isRecording 
+                  ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 scale-110 shadow-2xl shadow-red-200' 
+                  : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
+              }`}
+            >
+              {isRecording ? '⏹️' : '🎤'}
+            </button>
+            
+            <div>
+              {isRecording ? (
+                <div className="space-y-1">
+                  <p className="text-red-600 font-medium text-lg">🎤 Listening...</p>
+                  <p className="text-xs text-red-400">Tap again to stop</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-gray-600">Tap to add item</p>
+                </div>
+              )}
+            </div>
+
+            {/* Add Item Button - Text changes based on transcript */}
+            <button 
+              onClick={() => transcript ? parseAndAddItem(transcript) : null}
+              className={`w-full py-3 px-4 rounded-lg font-bold transition-all duration-200 ${
+                transcript 
+                  ? 'bg-green-500 hover:bg-green-600 text-white transform hover:scale-105 shadow-lg' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              disabled={!transcript}
+            >
+              {transcript ? `Add "${transcript}"` : 'Say item name and price'}
+            </button>
+          </div>
+        </div>
+
         {/* Manual Add Item */}
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg border border-white/20">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Add Item</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Add Item Manually</h3>
             <button
               onClick={() => setShowManualAdd(!showManualAdd)}
               className="rounded-full p-2 hover:bg-gray-100 transition-all duration-200"
@@ -319,7 +489,7 @@ const GroceryNotes = () => {
           {!currentNote?.items?.length ? (
             <div className="p-8 text-center">
               <p className="text-gray-500 text-lg">No items yet</p>
-              <p className="text-gray-400 text-sm mt-1">Add items manually above</p>
+              <p className="text-gray-400 text-sm mt-1">Start recording or add manually</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100/50">
