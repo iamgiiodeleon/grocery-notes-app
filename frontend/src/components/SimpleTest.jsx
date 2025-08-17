@@ -1,32 +1,83 @@
 import React from 'react';
 
 const SimpleTest = () => {
+  console.log('SimpleTest component rendering...');
+  
   return (
-    <div className="min-h-screen bg-blue-100 p-8">
-      <div className="max-w-md mx-auto text-center">
-        <h1 className="text-4xl font-bold text-blue-800 mb-4">
-          🎉 It's Working!
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#f0f8ff', 
+      padding: '2rem',
+      fontFamily: 'Arial, sans-serif'
+    }}>
+      <div style={{ 
+        maxWidth: '600px', 
+        margin: '0 auto', 
+        textAlign: 'center' 
+      }}>
+        <h1 style={{ 
+          color: '#0066cc', 
+          fontSize: '3rem',
+          marginBottom: '1rem'
+        }}>
+          🎉 React is Working!
         </h1>
-        <p className="text-lg text-blue-600 mb-6">
-          If you can see this, the React app is rendering correctly!
+        
+        <p style={{ 
+          fontSize: '1.5rem', 
+          color: '#333',
+          marginBottom: '2rem'
+        }}>
+          If you can see this, React is rendering correctly!
         </p>
-        <div className="bg-white rounded-lg p-6 shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Test Features
+        
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '2rem', 
+          borderRadius: '10px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ color: '#333', marginBottom: '1rem' }}>
+            Test Results:
           </h2>
-          <ul className="text-left text-gray-600 space-y-2">
-            <li>✅ React rendering</li>
-            <li>✅ Tailwind CSS</li>
-            <li>✅ Component structure</li>
-            <li>✅ Basic functionality</li>
+          <ul style={{ textAlign: 'left', color: '#666' }}>
+            <li>✅ React component rendering</li>
+            <li>✅ JavaScript execution</li>
+            <li>✅ DOM manipulation</li>
+            <li>✅ Basic styling</li>
           </ul>
         </div>
+        
         <button 
-          className="mt-6 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-          onClick={() => alert('JavaScript is working!')}
+          style={{
+            marginTop: '2rem',
+            padding: '1rem 2rem',
+            fontSize: '1.2rem',
+            backgroundColor: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer'
+          }}
+          onClick={() => {
+            alert('JavaScript is working perfectly!');
+            console.log('Button clicked!');
+          }}
         >
           Test JavaScript
         </button>
+        
+        <div style={{ 
+          marginTop: '2rem', 
+          padding: '1rem', 
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffeaa7',
+          borderRadius: '5px'
+        }}>
+          <p style={{ margin: 0, color: '#856404' }}>
+            <strong>Debug Info:</strong> Check browser console for logs
+          </p>
+        </div>
       </div>
     </div>
   );
