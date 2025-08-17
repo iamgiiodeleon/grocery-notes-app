@@ -1,0 +1,18 @@
+{
+  "name": "grocery-notes-app",
+  "version": "1.0.0",
+  "description": "Voice-powered grocery list application",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "deploy": "./deploy.sh",
+    "dev": "cd frontend && npm start",
+    "install-deps": "cd frontend && npm install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamgiiodeleon/grocery-notes-app.git"
+  },
+  "keywords": ["grocery", "voice", "react", "fastapi"],
+  "author": "Gio De Leon",
+  "license": "MIT"
+}

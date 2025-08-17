@@ -2,7 +2,7 @@
   "name": "grocery-notes-app",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://[YOUR-USERNAME].github.io/grocery-notes-app",
+  "homepage": "https://iamgiiodeleon.github.io/grocery-notes-app",
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
