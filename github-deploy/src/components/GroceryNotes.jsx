@@ -6,55 +6,48 @@ import { Input } from './ui/input';
 import { Mic, MicOff, Plus, ArrowLeft, Trash2, ShoppingCart, FileText, Calendar } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 
+// --- helpers ---
+const capitalizeWords = (s) =>
+  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
+
+/**
+ * Extract name (text) and price (number) from one combined string.
+ * Supports: "sugar 100", "100 sugar", "sugar 100 pesos", "milk 85.50", "₱120 coke", "85 php milk"
+ */
+const parseTextToNamePrice = (raw) => {
+  if (!raw) return null;
+  const text = raw.toLowerCase().trim();
+
+  // Remove currency words/symbols; normalize spaces
+  const cleaned = text
+    .replace(/(php|peso|pesos|piso|₱|\$)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // First number (int/float) anywhere
+  const numMatch = cleaned.match(/(\d+(?:\.\d+)?)/);
+  if (!numMatch) return null;
+
+  const price = parseFloat(numMatch[1]);
+  const name = cleaned.replace(numMatch[0], '').trim().replace(/\s{2,}/g, ' ');
+  if (!name || isNaN(price)) return null;
+
+  return { name, price };
+};
+
 const GroceryNotes = () => {
-  const [currentView, setCurrentView] = useState('notes'); // 'notes' or 'recording'
+  const [currentView, setCurrentView] = useState('notes'); // 'notes' | 'recording'
   const [notes, setNotes] = useState([]);
   const [currentNote, setCurrentNote] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [newNoteName, setNewNoteName] = useState('');
+  const [manualQuickAdd, setManualQuickAdd] = useState(''); // single input for "sugar 100"
+  const [deletingId, setDeletingId] = useState(null); // for subtle delete animation
   const recognitionRef = useRef(null);
   const { toast } = useToast();
 
-  // --- NEW (manual quick add state)
-  const [manualEntry, setManualEntry] = useState('');
-  const [manualParsed, setManualParsed] = useState({ name: '', price: 0 });
-
-  // --- NEW (swipe-to-delete helpers)
-  const touchStartXRef = useRef({});
-  const [deletingId, setDeletingId] = useState(null);
-  const SWIPE_THRESHOLD = 60; // px
-
-  // ===== Helpers =====
-  // Format "sugar 100" -> "Sugar 100"
-  const toTitleCase = (s = '') =>
-    s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-
-  // Parse any "<words> <number>" style in any order; picks the LAST number in the string as price
-  const parseSpokenItem = (rawText) => {
-    if (!rawText) return null;
-    const text = rawText
-      .toLowerCase()
-      .replace(/\b(php|peso|pesos|piso)\b\.?/gi, '')
-      .trim();
-
-    // find all numeric tokens
-    const nums = [...text.matchAll(/(\d+(?:\.\d+)?)/g)];
-    if (nums.length === 0) {
-      return { name: text.trim(), price: 0 }; // fallback: no number spoken/typed
-    }
-    const last = nums[nums.length - 1];
-    const price = parseFloat(last[1]);
-
-    // remove that number once from the string to get the name
-    const name = (text.slice(0, last.index) + text.slice(last.index + last[0].length))
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return { name: name || 'item', price: isNaN(price) ? 0 : price };
-  };
-
-  // Load notes from localStorage on component mount
+  // Load notes
   useEffect(() => {
     const savedNotes = localStorage.getItem('groceryNotes');
     if (savedNotes) {
@@ -62,12 +55,12 @@ const GroceryNotes = () => {
     }
   }, []);
 
-  // Save notes to localStorage whenever notes change
+  // Save notes
   useEffect(() => {
     localStorage.setItem('groceryNotes', JSON.stringify(notes));
   }, [notes]);
 
-  // Initialize speech recognition
+  // Speech recognition
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -78,26 +71,27 @@ const GroceryNotes = () => {
 
       recognitionRef.current.onresult = (event) => {
         const speechText = event.results[0][0].transcript.toLowerCase().trim();
-        // Mirror transcript into manual entry so user can tweak before adding
         setTranscript(speechText);
-        setManualEntry(speechText);
-        const parsed = parseSpokenItem(speechText);
-        if (parsed) setManualParsed(parsed);
 
-        toast({ title: "Heard", description: `"${speechText}"` });
+        // Parse & add via voice immediately
+        parseAndAddItem(speechText);
+
+        toast({
+          title: 'Processing...',
+          description: `Heard: "${speechText}"`,
+        });
       };
 
       recognitionRef.current.onend = () => {
         setIsRecording(false);
       };
 
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
+      recognitionRef.current.onerror = () => {
         setIsRecording(false);
         toast({
-          title: "Error",
-          description: "Speech recognition failed. Please try again.",
-          variant: "destructive"
+          title: 'Error',
+          description: 'Speech recognition failed. Please try again.',
+          variant: 'destructive',
         });
       };
     }
@@ -112,68 +106,60 @@ const GroceryNotes = () => {
   const parseAndAddItem = (text) => {
     if (!currentNote) {
       toast({
-        title: "Error",
-        description: "No grocery list selected",
-        variant: "destructive"
+        title: 'Error',
+        description: 'No grocery list selected',
+        variant: 'destructive',
       });
       return;
     }
 
-    const parsed = parseSpokenItem(text);
+    const parsed = parseTextToNamePrice(text);
     if (!parsed) {
       toast({
-        title: "Not Recognized",
+        title: 'Not Recognized',
         description: `Heard: "${text}". Try "item name price" format.`,
-        variant: "destructive"
+        variant: 'destructive',
       });
       return;
     }
 
-    const { name: itemName, price } = parsed;
+    const itemName = parsed.name;
+    const price = parsed.price;
 
     const newItem = {
-      id: Date.now() + Math.random(), // Ensure unique ID
+      id: Date.now() + Math.random(),
       name: itemName,
-      price: price,
-      timestamp: new Date().toLocaleTimeString()
+      price,
+      timestamp: new Date().toLocaleTimeString(),
     };
 
-    setNotes(prevNotes => {
-      const updatedNotes = prevNotes.map(note =>
+    setNotes((prevNotes) => {
+      const updatedNotes = prevNotes.map((note) =>
         note.id === currentNote.id
           ? {
               ...note,
               items: [...(note.items || []), newItem],
-              lastModified: new Date().toLocaleString()
+              lastModified: new Date().toLocaleString(),
             }
           : note
       );
-      // Keep currentNote in sync
-      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
-      setCurrentNote(updatedCurrentNote);
+      const updatedCurrent = updatedNotes.find((n) => n.id === currentNote.id);
+      setCurrentNote(updatedCurrent);
       return updatedNotes;
     });
 
     toast({
-      title: "Added ✅",
-      description: `${toTitleCase(itemName)} - ₱${Number(price || 0).toFixed(2)}`,
+      title: 'Added ✅',
+      description: `${capitalizeWords(itemName)} - ₱${price.toFixed(2)}`,
     });
-  };
-
-  // --- NEW: add from manual quick entry
-  const addManualItem = () => {
-    if (!manualEntry.trim()) return;
-    parseAndAddItem(manualEntry.trim());
-    setManualEntry('');
-    setManualParsed({ name: '', price: 0 });
   };
 
   const createNewNote = () => {
     if (!newNoteName.trim()) {
       toast({
-        title: "Name Required",
-        description: "Please enter a name for your grocery list",
-        variant: "destructive"
+        title: 'Name Required',
+        description: 'Please enter a name for your grocery list',
+        variant: 'destructive',
       });
       return;
     }
@@ -183,45 +169,43 @@ const GroceryNotes = () => {
       name: newNoteName.trim(),
       items: [],
       createdAt: new Date().toLocaleDateString(),
-      lastModified: new Date().toLocaleString()
+      lastModified: new Date().toLocaleString(),
     };
 
-    setNotes(prev => [newNote, ...prev]);
+    setNotes((prev) => [newNote, ...prev]);
     setNewNoteName('');
     toast({
-      title: "Created",
+      title: 'Created',
       description: `"${newNote.name}" grocery list created`,
     });
   };
 
   const openNote = (note) => {
-    const latestNote = notes.find(n => n.id === note.id) || note;
+    const latestNote = notes.find((n) => n.id === note.id) || note;
     setCurrentNote(latestNote);
     setCurrentView('recording');
   };
 
   const deleteNote = (noteId) => {
-    setNotes(prev => prev.filter(note => note.id !== noteId));
+    setNotes((prev) => prev.filter((note) => note.id !== noteId));
     if (currentNote && currentNote.id === noteId) {
       setCurrentNote(null);
       setCurrentView('notes');
     }
     toast({
-      title: "Deleted",
-      description: "Grocery list has been deleted",
+      title: 'Deleted',
+      description: 'Grocery list has been deleted',
     });
   };
 
   const startRecording = () => {
     if (recognitionRef.current && !isRecording) {
       setIsRecording(true);
-      setTranscript('');     // clear previous transcript
-      setManualEntry('');    // clear manual
-      setManualParsed({ name: '', price: 0 });
+      setTranscript('');
       recognitionRef.current.start();
       toast({
-        title: "Listening...",
-        description: "Say item name price (e.g., 'coke 100')",
+        title: 'Listening...',
+        description: "Say item name and price (e.g., 'coke 100')",
       });
     }
   };
@@ -233,39 +217,116 @@ const GroceryNotes = () => {
     }
   };
 
-  const removeItem = (itemId) => {
-    const updatedNotes = notes.map(note =>
-      note.id === currentNote.id
-        ? { ...note, items: note.items.filter(item => item.id !== itemId), lastModified: new Date().toLocaleString() }
-        : note
-    );
-    setNotes(updatedNotes);
-    const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
-    setCurrentNote(updatedCurrentNote);
-    toast({ title: "Removed", description: "Item deleted from list" });
-  };
-
-  // --- NEW: lightweight swipe-to-delete (no extra libs)
-  const onTouchStart = (id) => (e) => {
-    touchStartXRef.current[id] = e.touches?.[0]?.clientX ?? 0;
-  };
-  const onTouchEnd = (id) => (e) => {
-    const startX = touchStartXRef.current[id] ?? 0;
-    const endX = e.changedTouches?.[0]?.clientX ?? startX;
-    const dx = endX - startX;
-    if (Math.abs(dx) > SWIPE_THRESHOLD) {
-      // Subtle slide/fade before removal
-      setDeletingId(id);
-      setTimeout(() => {
-        removeItem(id);
-        setDeletingId(null);
-        delete touchStartXRef.current[id];
-      }, 180);
-    }
+  // swipe + animated delete
+  const requestRemoveItem = (itemId) => {
+    setDeletingId(itemId);
+    setTimeout(() => {
+      const updatedNotes = notes.map((note) =>
+        note.id === currentNote.id
+          ? {
+              ...note,
+              items: note.items.filter((item) => item.id !== itemId),
+              lastModified: new Date().toLocaleString(),
+            }
+          : note
+      );
+      setNotes(updatedNotes);
+      const updatedCurrent = updatedNotes.find((n) => n.id === currentNote.id);
+      setCurrentNote(updatedCurrent);
+      setDeletingId(null);
+      toast({
+        title: 'Removed',
+        description: 'Item deleted from list',
+      });
+    }, 180); // subtle animation duration
   };
 
   const getTotalPrice = (items) => {
-    return items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+    return (items || []).reduce((sum, item) => sum + (item.price || 0), 0);
+  };
+
+  // ItemRow with swipe
+  const ItemRow = ({ item, index }) => {
+    const startXRef = useRef(null);
+    const currentXRef = useRef(0);
+    const [translate, setTranslate] = useState(0);
+
+    const handleTouchStart = (e) => {
+      startXRef.current = e.touches[0].clientX;
+    };
+
+    const handleTouchMove = (e) => {
+      if (startXRef.current === null) return;
+      const dx = e.touches[0].clientX - startXRef.current;
+      currentXRef.current = dx;
+      const limited = Math.max(Math.min(dx, 96), -96); // +/- 96px
+      setTranslate(limited);
+    };
+
+    const handleTouchEnd = () => {
+      const dx = currentXRef.current;
+      const threshold = 72;
+      if (Math.abs(dx) > threshold) {
+        requestRemoveItem(item.id);
+      } else {
+        setTranslate(0);
+      }
+      startXRef.current = null;
+      currentXRef.current = 0;
+    };
+
+    const deleting = deletingId === item.id;
+
+    return (
+      <div className="relative overflow-hidden">
+        {/* background delete hint */}
+        <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
+          <div className="opacity-60">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <div className="opacity-60">
+            <Trash2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div
+          className={[
+            'p-4 flex items-center justify-between group bg-white relative',
+            'transition-all duration-200 will-change-transform',
+            deleting ? 'translate-x-full opacity-0' : '',
+          ].join(' ')}
+          style={{
+            transform: `translateX(${translate}px)`,
+            touchAction: 'pan-y',
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="flex items-center space-x-3 flex-1">
+            <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
+              {index + 1}
+            </Badge>
+            <div className="flex-1">
+              <p className="font-medium text-gray-900 capitalize">{item.name}</p>
+              <p className="text-xs text-gray-500">{item.timestamp}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <span className="font-semibold text-gray-900">₱{Number(item.price).toFixed(2)}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => requestRemoveItem(item.id)}
+              className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-8 h-8 p-0 flex items-center justify-center"
+              title="Remove item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (currentView === 'notes') {
@@ -273,14 +334,14 @@ const GroceryNotes = () => {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-md mx-auto space-y-4">
           {/* Header */}
-          <div className="text-center py-8">
-            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Grocery Notes</h1>
+          <div className="text-center py-6">
+            <h1 className="text-2xl font-semibold text-gray-900 mb-1">Grocery Notes</h1>
             <p className="text-gray-600 text-sm">Voice-powered shopping lists</p>
           </div>
 
           {/* Create New Note */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">New List</h3>
+          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">New List</h3>
             <div className="space-y-3">
               <Input
                 placeholder="e.g., Weekly Groceries"
@@ -311,7 +372,7 @@ const GroceryNotes = () => {
               notes.map((note) => (
                 <div key={note.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                   <div
-                    className="p-6 cursor-pointer active:bg-gray-50 transition-colors"
+                    className="p-4 sm:p-6 cursor-pointer active:bg-gray-50 transition-colors"
                     onClick={() => openNote(note)}
                   >
                     <div className="flex items-start justify-between">
@@ -357,12 +418,29 @@ const GroceryNotes = () => {
     );
   }
 
-  // ===== Recording View =====
+  // Recording View
+  const addButtonLabel = transcript
+    ? `Add “${capitalizeWords(transcript)}”`
+    : 'Add Item';
+
+  const handleAddClick = () => {
+    if (transcript) {
+      return parseAndAddItem(transcript);
+    }
+    if (manualQuickAdd.trim()) {
+      return parseAndAddItem(manualQuickAdd.trim());
+    }
+    toast({
+      title: 'Nothing to add',
+      description: 'Say something or type e.g. "sugar 100".',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between py-3">
           <Button
             variant="ghost"
             onClick={() => setCurrentView('notes')}
@@ -371,7 +449,7 @@ const GroceryNotes = () => {
           >
             <ArrowLeft className="h-6 w-6" />
           </Button>
-          <div className="text-center flex-1">
+        <div className="text-center flex-1">
             <h1 className="text-lg font-semibold text-gray-900">{currentNote?.name}</h1>
             <p className="text-sm text-gray-500">{currentNote?.items.length} items</p>
           </div>
@@ -379,68 +457,26 @@ const GroceryNotes = () => {
         </div>
 
         {/* Total Amount */}
-        <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div className="bg-white rounded-2xl p-5 text-center shadow-sm">
           <p className="text-sm text-gray-500 mb-1">Total Amount</p>
           <p className="text-3xl font-bold text-gray-900">
             ₱{getTotalPrice(currentNote?.items || []).toFixed(2)}
           </p>
         </div>
 
-        {/* Manual Quick Add (mobile-first stacked) */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={manualEntry}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setManualEntry(val);
-                  const parsed = parseSpokenItem(val);
-                  if (parsed) setManualParsed(parsed);
-                }}
-                placeholder="Type item & price e.g. 'sugar 100'"
-                className="flex-1 border rounded-xl p-3 bg-gray-50"
-              />
-              <Button onClick={addManualItem} className="rounded-xl bg-green-600 hover:bg-green-700 h-12" disabled={!currentNote}>
-                <Plus className="h-5 w-5 mr-2" /> Add Item
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input
-                value={manualParsed.name}
-                onChange={(e)=> setManualParsed((p)=>({...p, name: e.target.value}))}
-                placeholder="Item name"
-                className="rounded-xl"
-              />
-              <Input
-                value={manualParsed.price}
-                onChange={(e)=> setManualParsed((p)=>({...p, price: e.target.value}))}
-                placeholder="Price"
-                inputMode="decimal"
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Voice Recording */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <div className="text-center space-y-4">
+        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="text-center space-y-3">
             <Button
               size="lg"
               className={`w-20 h-20 rounded-full transition-all duration-200 ${
                 isRecording
-                  ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-200'
-                  : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
+                  ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg'
+                  : 'bg-blue-500 hover:bg-blue-600 shadow-lg'
               }`}
               onClick={isRecording ? stopRecording : startRecording}
             >
-              {isRecording ? (
-                <MicOff className="h-8 w-8" />
-              ) : (
-                <Mic className="h-8 w-8" />
-              )}
+              {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
             </Button>
 
             <div>
@@ -459,25 +495,45 @@ const GroceryNotes = () => {
 
             {transcript && (
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                <p className="text-xs text-blue-600 mb-1">You said:</p>
+                <p className="text-xs text-blue-600 mb-1">Heard:</p>
                 <p className="text-sm font-medium text-blue-800">"{transcript}"</p>
-                <p className="text-xs text-blue-500 mt-1">Confirm to add this item</p>
               </div>
             )}
-
-            {/* The main Add Item button (label mirrors what you said) */}
-            {transcript && (
-              <Button
-                onClick={() => parseAndAddItem(transcript)}
-                className="w-full rounded-xl bg-green-600 hover:bg-green-700 h-12"
-                disabled={!currentNote}
-                title="Add the recognized item to the list"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                {toTitleCase(transcript)}
-              </Button>
-            )}
           </div>
+
+          {/* Manual quick add (combined field) + Add button (uses voice text if present) */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <Input
+              placeholder='Type e.g. "sugar 100"'
+              value={manualQuickAdd}
+              onChange={(e) => setManualQuickAdd(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddClick();
+              }}
+              className="rounded-xl border-gray-200 bg-gray-50 flex-1"
+            />
+            <Button
+              onClick={handleAddClick}
+              className="rounded-xl h-11 bg-green-600 hover:bg-green-700"
+              title={transcript ? capitalizeWords(transcript) : 'Add item'}
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              {addButtonLabel}
+            </Button>
+          </div>
+
+          {/* Dev test button preserved */}
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => parseAndAddItem(transcript || 'milk 85')}
+              className="mt-1"
+              disabled={!transcript && !currentNote}
+            >
+              {transcript ? `Test Add "${transcript}"` : 'Test Add "milk 85"'}
+            </Button>
+          )}
         </div>
 
         {/* Items List */}
@@ -486,51 +542,18 @@ const GroceryNotes = () => {
             <div className="p-8 text-center">
               <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500">No items yet</p>
-              <p className="text-gray-400 text-sm mt-1">Start recording to add items</p>
+              <p className="text-gray-400 text-sm mt-1">Start recording or type to add items</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
               {currentNote.items.map((item, index) => (
-                <div
-                  key={item.id}
-                  onTouchStart={onTouchStart(item.id)}
-                  onTouchEnd={onTouchEnd(item.id)}
-                  style={{
-                    transition: 'transform 180ms ease, opacity 180ms ease',
-                    transform: deletingId === item.id ? 'translateX(-80px)' : 'translateX(0)',
-                    opacity: deletingId === item.id ? 0 : 1
-                  }}
-                  className="p-4 flex items-center justify-between group bg-white"
-                >
-                  <div className="flex items-center space-x-3 flex-1">
-                    <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                      {index + 1}
-                    </Badge>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900 capitalize">{item.name}</p>
-                      <p className="text-xs text-gray-500">{item.timestamp}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="font-semibold text-gray-900">₱{Number(item.price).toFixed(2)}</span>
-                    {/* Easy remove button - always visible */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeItem(item.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-8 h-8 p-0 flex items-center justify-center"
-                      title="Remove item"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <ItemRow key={item.id} item={item} index={index} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Debug Info - Remove in production */}
+        {/* Debug Info - optional */}
         {process.env.NODE_ENV === 'development' && (
           <div className="bg-yellow-50 rounded-2xl p-4 text-xs space-y-1">
             <p><strong>Debug Info:</strong></p>
