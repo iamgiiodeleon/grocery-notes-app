@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/grocery-notes-app/static/css/main.f3b804a0.css",
-    "main.js": "/grocery-notes-app/static/js/main.f3820a43.js",
+    "main.css": "/grocery-notes-app/static/css/main.03f15b1d.css",
+    "main.js": "/grocery-notes-app/static/js/main.74559f2e.js",
     "index.html": "/grocery-notes-app/index.html",
-    "main.f3b804a0.css.map": "/grocery-notes-app/static/css/main.f3b804a0.css.map",
-    "main.f3820a43.js.map": "/grocery-notes-app/static/js/main.f3820a43.js.map"
+    "main.03f15b1d.css.map": "/grocery-notes-app/static/css/main.03f15b1d.css.map",
+    "main.74559f2e.js.map": "/grocery-notes-app/static/js/main.74559f2e.js.map"
   },
   "entrypoints": [
-    "static/css/main.f3b804a0.css",
-    "static/js/main.f3820a43.js"
+    "static/css/main.03f15b1d.css",
+    "static/js/main.74559f2e.js"
   ]
 }
