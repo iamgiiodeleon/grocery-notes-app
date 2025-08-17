@@ -6,6 +6,62 @@ import { Input } from './ui/input';
 import { Mic, MicOff, Plus, ArrowLeft, Trash2, ShoppingCart, FileText, Calendar } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 
+const SwipeableRow = ({ children, onRemove, deleteThreshold = 80 }) => {
+  const startXRef = React.useRef(0);
+  const startYRef = React.useRef(0);
+  const [translateX, setTranslateX] = React.useState(0);
+  const [swiping, setSwiping] = React.useState(false);
+  const [beingDeleted, setBeingDeleted] = React.useState(false);
+
+  const handleTouchStart = (e) => {
+    if (beingDeleted) return;
+    const touch = e.touches[0];
+    startXRef.current = touch.clientX;
+    startYRef.current = touch.clientY;
+    setSwiping(true);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!swiping || beingDeleted) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - startXRef.current;
+    const deltaY = touch.clientY - startYRef.current;
+    if (Math.abs(deltaX) < Math.abs(deltaY)) return;
+    setTranslateX(Math.max(-120, Math.min(120, deltaX)));
+  };
+
+  const handleTouchEnd = () => {
+    setSwiping(false);
+    if (beingDeleted) return;
+    if (Math.abs(translateX) > deleteThreshold) {
+      setBeingDeleted(true);
+      const finalX = translateX < 0 ? -window.innerWidth : window.innerWidth;
+      setTranslateX(finalX);
+      setTimeout(() => {
+        onRemove && onRemove();
+      }, 180);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  return (
+    <div
+      className="relative"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: `translateX(${translateX}px)`,
+        opacity: 1 - Math.min(0.4, Math.abs(translateX) / 300),
+        transition: swiping ? 'none' : 'transform 200ms ease, opacity 200ms ease'
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 const GroceryNotes = () => {
   const [currentView, setCurrentView] = useState('notes'); // 'notes' or 'recording'
   const [notes, setNotes] = useState([]);
@@ -15,6 +71,8 @@ const GroceryNotes = () => {
   const [newNoteName, setNewNoteName] = useState('');
   const recognitionRef = useRef(null);
   const { toast } = useToast();
+  const [manualItemName, setManualItemName] = useState('');
+  const [manualItemPrice, setManualItemPrice] = useState('');
 
   // Load notes from localStorage on component mount
   useEffect(() => {
@@ -42,13 +100,16 @@ const GroceryNotes = () => {
         const speechText = event.results[0][0].transcript.toLowerCase().trim();
         console.log("Speech recognized:", speechText);
         setTranscript(speechText);
-        
-        // Automatically parse and add the item when speech is recognized
-        parseAndAddItem(speechText);
-        
-        // Show processing message
+
+        // Pre-fill manual inputs by splitting text and number
+        const m = speechText.match(/^(.+?)\s+(\d+(?:\.\d+)?)/i);
+        if (m) {
+          setManualItemName(m[1].trim());
+          setManualItemPrice(m[2]);
+        }
+
         toast({
-          title: "Processing...",
+          title: "Voice captured",
           description: `Heard: "${speechText}"`,
         });
       };
@@ -134,11 +195,8 @@ const GroceryNotes = () => {
         description: `${itemName} - ₱${price.toFixed(2)}`,
       });
       
-      // Force a re-render and keep transcript visible for manual button use
-      setTimeout(() => {
-        // Don't clear transcript immediately so user can see it and use test button
-        // setTranscript('');
-      }, 2000);
+      // Clear transcript after successful addition
+      setTranscript('');
       
     } else {
       console.log("Failed to parse:", text, "Regex match:", match);
@@ -148,6 +206,71 @@ const GroceryNotes = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const handleManualNameChange = (e) => {
+    const value = e.target.value;
+    const m = value.match(/^(.+?)\s+(\d+(?:\.\d+)?)/);
+    if (m) {
+      setManualItemName(m[1].trim());
+      setManualItemPrice(m[2]);
+    } else {
+      setManualItemName(value);
+    }
+  };
+
+  const addManualItem = () => {
+    if (!currentNote) {
+      toast({
+        title: "Error",
+        description: "No grocery list selected",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    let name = manualItemName.trim();
+    let priceValue = parseFloat(manualItemPrice);
+
+    if ((!name || isNaN(priceValue)) && manualItemName) {
+      const m = manualItemName.match(/^(.+?)\s+(\d+(?:\.\d+)?)/i);
+      if (m) {
+        if (!name) name = m[1].trim();
+        if (isNaN(priceValue)) priceValue = parseFloat(m[2]);
+      }
+    }
+
+    if (!name) {
+      toast({ title: "Error", description: "Item name is required", variant: "destructive" });
+      return;
+    }
+
+    if (isNaN(priceValue)) {
+      priceValue = 0;
+    }
+
+    const newItem = {
+      id: Date.now() + Math.random(),
+      name,
+      price: priceValue,
+      timestamp: new Date().toLocaleTimeString()
+    };
+
+    setNotes(prevNotes => {
+      const updatedNotes = prevNotes.map(note => 
+        note.id === currentNote.id 
+          ? { ...note, items: [...(note.items || []), newItem], lastModified: new Date().toLocaleString() }
+          : note
+      );
+      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+      setCurrentNote(updatedCurrentNote);
+      return updatedNotes;
+    });
+
+    toast({ title: "Added ✅", description: `${name} - ₱${priceValue.toFixed(2)}` });
+
+    setManualItemName('');
+    setManualItemPrice('');
   };
 
   const createNewNote = () => {
@@ -375,105 +498,127 @@ const GroceryNotes = () => {
               )}
             </Button>
             
-            <div>
-              {isRecording ? (
-                <div className="space-y-1">
-                  <p className="text-red-600 font-medium">🎤 Listening...</p>
-                  <p className="text-xs text-red-400">Tap again to stop</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-gray-600">Tap to add item</p>
-                  <p className="text-xs text-gray-400">Say "item name price"</p>
-                </div>
-              )}
-            </div>
-
-            {transcript && (
-              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                <p className="text-xs text-blue-600 mb-1">You said:</p>
-                <p className="text-sm font-medium text-blue-800">"{transcript}"</p>
-                <p className="text-xs text-blue-500 mt-1">Click test button to add this item</p>
+            {isRecording ? (
+              <div className="space-y-1">
+                <p className="text-red-600 font-medium">🎤 Listening...</p>
+                <p className="text-xs text-red-400">Tap again to stop</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-gray-600">Tap to add item</p>
+                <p className="text-xs text-gray-400">Say "item name price"</p>
               </div>
             )}
-
-            {/* Test button for debugging */}
-            {process.env.NODE_ENV === 'development' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => parseAndAddItem(transcript || 'milk 85')}
-                className="mt-2"
-                disabled={!transcript && !currentNote}
-              >
-                {transcript ? `Test Add "${transcript}"` : 'Test Add "milk 85"'}
-              </Button>
-            )}
           </div>
-        </div>
 
-        {/* Items List */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {!currentNote?.items?.length ? (
-            <div className="p-8 text-center">
-              <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No items yet</p>
-              <p className="text-gray-400 text-sm mt-1">Start recording to add items</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {currentNote.items.map((item, index) => (
-                <div key={item.id} className="p-4 flex items-center justify-between group">
-                  <div className="flex items-center space-x-3 flex-1">
-                    <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                      {index + 1}
-                    </Badge>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900 capitalize">{item.name}</p>
-                      <p className="text-xs text-gray-500">{item.timestamp}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="font-semibold text-gray-900">₱{item.price.toFixed(2)}</span>
-                    {/* Easy remove button - always visible */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeItem(item.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-8 h-8 p-0 flex items-center justify-center"
-                      title="Remove item"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+          {transcript && (
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+              <p className="text-xs text-blue-600 mb-1">You said:</p>
+              <p className="text-sm font-medium text-blue-800">"{transcript}"</p>
+              <Button
+                onClick={() => parseAndAddItem(transcript)}
+                className="mt-2"
+                disabled={!currentNote}
+              >
+                {transcript.charAt(0).toUpperCase() + transcript.slice(1)}
+              </Button>
             </div>
           )}
-        </div>
 
-        {/* Debug Info - Remove in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="bg-yellow-50 rounded-2xl p-4 text-xs space-y-1">
-            <p><strong>Debug Info:</strong></p>
-            <p>Current Note ID: {currentNote?.id}</p>
-            <p>Items Count: {currentNote?.items?.length || 0}</p>
-            <p>Last Transcript: "{transcript}"</p>
-            <p>Total Notes: {notes.length}</p>
-            <p>Recording: {isRecording ? 'YES' : 'NO'}</p>
-            {currentNote?.items?.length > 0 && (
-              <div>
-                <p><strong>Items:</strong></p>
-                {currentNote.items.map((item, idx) => (
-                  <p key={item.id}>• {item.name} - ₱{item.price}</p>
+          </div>
+
+          {/* Manual Add Item */}
+          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Add Manually</h3>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <Input
+                placeholder="Item name"
+                value={manualItemName}
+                onChange={handleManualNameChange}
+                className="flex-1 rounded-xl border-gray-200 bg-gray-50"
+                onKeyPress={(e) => e.key === 'Enter' && addManualItem()}
+              />
+              <Input
+                type="number"
+                placeholder="Price"
+                value={manualItemPrice}
+                onChange={(e) => setManualItemPrice(e.target.value)}
+                className="w-full sm:w-24 rounded-xl border-gray-200 bg-gray-50"
+                onKeyPress={(e) => e.key === 'Enter' && addManualItem()}
+              />
+              <Button
+                onClick={addManualItem}
+                className="w-full sm:w-auto rounded-xl bg-green-500 hover:bg-green-600"
+              >
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Items List */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {!currentNote?.items?.length ? (
+              <div className="p-8 text-center">
+                <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No items yet</p>
+                <p className="text-gray-400 text-sm mt-1">Start recording to add items</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {currentNote.items.map((item, index) => (
+                  <SwipeableRow key={item.id} onRemove={() => removeItem(item.id)}>
+                    <div className="p-4 flex items-center justify-between group">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <Badge variant="secondary" className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
+                          {index + 1}
+                        </Badge>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900 capitalize">{item.name}</p>
+                          <p className="text-xs text-gray-500">{item.timestamp}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="font-semibold text-gray-900">₱{item.price.toFixed(2)}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeItem(item.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-8 h-8 p-0 flex items-center justify-center"
+                          title="Remove item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </SwipeableRow>
                 ))}
               </div>
             )}
           </div>
-        )}
+
+          {/* Debug Info - Remove in production */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-yellow-50 rounded-2xl p-4 text-xs space-y-1">
+              <p><strong>Debug Info:</strong></p>
+              <p>Current Note ID: {currentNote?.id}</p>
+              <p>Items Count: {currentNote?.items?.length || 0}</p>
+              <p>Last Transcript: "{transcript}"</p>
+              <p>Total Notes: {notes.length}</p>
+              <p>Recording: {isRecording ? 'YES' : 'NO'}</p>
+              {currentNote?.items?.length > 0 && (
+                <div>
+                  <p><strong>Items:</strong></p>
+                  {currentNote.items.map((item, idx) => (
+                    <p key={item.id}>• {item.name} - ₱{item.price}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default GroceryNotes;
