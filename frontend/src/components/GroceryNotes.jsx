@@ -11,6 +11,7 @@ const GroceryNotes = () => {
   const [manualItemPrice, setManualItemPrice] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [swipedItemId, setSwipedItemId] = useState(null);
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -50,9 +51,6 @@ const GroceryNotes = () => {
           
           // Automatically parse and add the item when speech is recognized
           parseAndAddItem(speechText);
-          
-          // Show processing message
-          alert(`Heard: "${speechText}"`);
         };
 
         recognitionRef.current.onend = () => {
@@ -62,15 +60,12 @@ const GroceryNotes = () => {
         recognitionRef.current.onerror = (event) => {
           console.error('Speech recognition error:', event.error);
           setIsRecording(false);
-          alert("Speech recognition failed. Please try again.");
         };
       } else {
         console.log("Speech recognition not supported in this browser");
-        alert("Voice features not supported in this browser. You can still add items manually.");
       }
     } catch (error) {
       console.error("Error initializing speech recognition:", error);
-      alert("Some features may not work properly. You can still add items manually.");
     }
 
     return () => {
@@ -82,13 +77,11 @@ const GroceryNotes = () => {
 
   const parseAndAddItem = (text) => {
     if (!currentNote && notes.length === 0) {
-      alert('Please create a grocery list first or use the "Quick Add to New List" option below');
       return;
     }
 
     // If no current note is selected but we have notes, ask user to select one
     if (!currentNote && notes.length > 0) {
-      alert('Please select a grocery list first, or use the "Quick Add to New List" option below');
       return;
     }
 
@@ -135,8 +128,6 @@ const GroceryNotes = () => {
         return updatedNotes;
       });
       
-      alert(`Added: ${itemName} - ₱${price.toFixed(2)}`);
-      
       // Clear transcript after successful addition
       setTimeout(() => {
         setTranscript('');
@@ -144,7 +135,6 @@ const GroceryNotes = () => {
       
     } else {
       console.log("Failed to parse:", text, "Regex match:", match);
-      alert(`Heard: "${text}". Try "item name price" format.`);
     }
   };
 
@@ -153,7 +143,6 @@ const GroceryNotes = () => {
       setIsRecording(true);
       setTranscript(''); // Clear previous transcript
       recognitionRef.current.start();
-      alert("Listening... Say item name and price (e.g., 'coke 100')");
     }
   };
 
@@ -166,7 +155,6 @@ const GroceryNotes = () => {
 
   const createNewNote = () => {
     if (!newNoteName.trim()) {
-      alert('Please enter a name for your grocery list');
       return;
     }
 
@@ -180,7 +168,6 @@ const GroceryNotes = () => {
 
     setNotes(prev => [newNote, ...prev]);
     setNewNoteName('');
-    alert(`"${newNote.name}" grocery list created!`);
   };
 
   const openNote = (note) => {
@@ -188,23 +175,19 @@ const GroceryNotes = () => {
   };
 
   const deleteNote = (noteId) => {
-    if (confirm('Are you sure you want to delete this list?')) {
-      setNotes(prev => prev.filter(note => note.id !== noteId));
-      if (currentNote && currentNote.id === noteId) {
-        setCurrentNote(null);
-      }
+    setNotes(prev => prev.filter(note => note.id !== noteId));
+    if (currentNote && currentNote.id === noteId) {
+      setCurrentNote(null);
     }
   };
 
   const addManualItem = () => {
     if (!manualItemName.trim() || !manualItemPrice.trim()) {
-      alert('Please fill in both item name and price');
       return;
     }
 
     const price = parseFloat(manualItemPrice);
     if (isNaN(price) || price <= 0) {
-      alert('Please enter a valid price');
       return;
     }
 
@@ -236,69 +219,50 @@ const GroceryNotes = () => {
     setManualItemName('');
     setManualItemPrice('');
     setShowManualAdd(false);
-    alert(`Added: ${newItem.name} - ₱${newItem.price.toFixed(2)}`);
   };
 
   const removeItem = (itemId) => {
-    if (confirm('Remove this item?')) {
-      const updatedNotes = notes.map(note => 
-        note.id === currentNote.id 
-          ? { ...note, items: note.items.filter(item => item.id !== itemId), lastModified: new Date().toLocaleString() }
-          : note
-      );
+    const updatedNotes = notes.map(note => 
+      note.id === currentNote.id 
+        ? { ...note, items: note.items.filter(item => item.id !== itemId), lastModified: new Date().toLocaleString() }
+        : note
+    );
+    
+    setNotes(updatedNotes);
+    const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+    setCurrentNote(updatedCurrentNote);
+  };
+
+  // Swipe handling for mobile
+  const handleTouchStart = (e, itemId) => {
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    
+    const handleTouchMove = (e) => {
+      const touch = e.touches[0];
+      const currentX = touch.clientX;
+      const diffX = startX - currentX;
       
-      setNotes(updatedNotes);
-      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
-      setCurrentNote(updatedCurrentNote);
-    }
+      if (Math.abs(diffX) > 50) {
+        setSwipedItemId(itemId);
+      }
+    };
+    
+    const handleTouchEnd = () => {
+      if (swipedItemId === itemId) {
+        removeItem(itemId);
+        setSwipedItemId(null);
+      }
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+    
+    document.addEventListener('touchmove', handleTouchMove);
+    document.addEventListener('touchend', handleTouchEnd);
   };
 
   const getTotalPrice = (items) => {
     return items.reduce((sum, item) => sum + item.price, 0);
-  };
-
-  const quickAddToNewList = () => {
-    if (!transcript.trim()) {
-      alert('Please say an item name and price first.');
-      return;
-    }
-    if (!newNoteName.trim()) {
-      alert('Please enter a name for your new list.');
-      return;
-    }
-
-    // Parse the transcript to extract item name and price
-    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
-    const match = transcript.match(regex);
-    
-    if (!match) {
-      alert(`Could not parse "${transcript}". Please use format "item name price"`);
-      return;
-    }
-
-    const itemName = match[1].trim();
-    const price = parseFloat(match[2]);
-
-    const newNote = {
-      id: Date.now(),
-      name: newNoteName.trim(),
-      items: [],
-      createdAt: new Date().toLocaleDateString(),
-      lastModified: new Date().toLocaleString()
-    };
-
-    // Add the parsed item to the new note
-    newNote.items.push({
-      id: Date.now() + Math.random(),
-      name: itemName,
-      price: price,
-      timestamp: new Date().toLocaleTimeString()
-    });
-
-    setNotes(prev => [newNote, ...prev]);
-    setNewNoteName('');
-    alert(`"${newNote.name}" grocery list created with "${itemName} - ₱${price.toFixed(2)}"!`);
-    setTranscript(''); // Clear transcript after quick add
   };
 
   // Show loading state
@@ -346,67 +310,6 @@ const GroceryNotes = () => {
             <p className="text-gray-600 text-sm">Voice-powered shopping lists</p>
           </div>
 
-          {/* Voice Recording - Available from main view */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg border border-white/20">
-            <div className="text-center space-y-4">
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 ${
-                  isRecording 
-                    ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 scale-110 shadow-2xl shadow-red-200' 
-                    : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
-                }`}
-              >
-                {isRecording ? '⏹️' : '🎤'}
-              </button>
-              
-              <div>
-                {isRecording ? (
-                  <div className="space-y-1">
-                    <p className="text-red-600 font-medium text-lg">🎤 Listening...</p>
-                    <p className="text-xs text-red-400">Tap again to stop</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-gray-600">Tap to record items</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Add Item Button - Text changes based on transcript */}
-              <button 
-                onClick={() => transcript ? parseAndAddItem(transcript) : null}
-                className={`w-full py-3 px-4 rounded-lg font-bold transition-all duration-200 ${
-                  transcript 
-                    ? 'bg-green-500 hover:bg-green-600 text-white transform hover:scale-105 shadow-lg' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-                disabled={!transcript}
-              >
-                {transcript ? `Add "${transcript}"` : 'Say item name and price'}
-              </button>
-
-              {/* Quick Add to New List */}
-              {transcript && (
-                <div className="bg-blue-50/80 rounded-xl p-3 border border-blue-200">
-                  <p className="text-xs text-blue-600 mb-2">Quick Add to New List:</p>
-                  <input
-                    type="text"
-                    placeholder="List name (optional)"
-                    className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    onKeyPress={(e) => e.key === 'Enter' && quickAddToNewList()}
-                  />
-                  <button 
-                    onClick={quickAddToNewList}
-                    className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded-lg transition-colors"
-                  >
-                    Create List & Add Item
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Create New Note */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg border border-white/20">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">New List</h3>
@@ -433,7 +336,7 @@ const GroceryNotes = () => {
             {notes.length === 0 ? (
               <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 text-center shadow-lg border border-white/20">
                 <p className="text-gray-500 text-lg">No grocery lists yet</p>
-                <p className="text-gray-400 text-sm mt-1">Create your first list above or use voice recording</p>
+                <p className="text-gray-400 text-sm mt-1">Create your first list above</p>
               </div>
             ) : (
               notes.map((note, index) => (
@@ -488,28 +391,29 @@ const GroceryNotes = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-md mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between py-4">
-          <button
-            onClick={() => setCurrentNote(null)}
-            className="rounded-full p-2 hover:bg-white/50 transition-all duration-200"
-            title="Back to notes"
-          >
-            ← Back
-          </button>
-          <div className="text-center flex-1">
-            <h1 className="text-xl font-semibold text-gray-900">{currentNote?.name}</h1>
-            <p className="text-sm text-gray-500">{currentNote?.items.length} items</p>
+        {/* Back Button and Total Amount - Reduced padding top */}
+        <div className="pt-2">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setCurrentNote(null)}
+              className="rounded-full p-2 hover:bg-white/50 transition-all duration-200"
+              title="Back to notes"
+            >
+              ← Back
+            </button>
+            <div className="text-center flex-1">
+              <h1 className="text-xl font-semibold text-gray-900">{currentNote?.name}</h1>
+            </div>
+            <div className="w-10" />
           </div>
-          <div className="w-10" />
-        </div>
 
-        {/* Total Amount */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 text-center shadow-lg border border-white/20">
-          <p className="text-sm text-gray-500 mb-1">Total Amount</p>
-          <p className="text-4xl font-bold text-green-600">
-            ₱{getTotalPrice(currentNote?.items || []).toFixed(2)}
-          </p>
+          {/* Total Amount - Now at the very top */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 text-center shadow-lg border border-white/20 mb-4">
+            <p className="text-sm text-gray-500 mb-1">Total Amount</p>
+            <p className="text-4xl font-bold text-green-600">
+              ₱{getTotalPrice(currentNote?.items || []).toFixed(2)}
+            </p>
+          </div>
         </div>
 
         {/* Voice Recording */}
@@ -523,13 +427,13 @@ const GroceryNotes = () => {
                   : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
               }`}
             >
-              {isRecording ? '⏹️' : '🎤'}
+              {isRecording ? '⏹' : '🎤'}
             </button>
             
             <div>
               {isRecording ? (
                 <div className="space-y-1">
-                  <p className="text-red-600 font-medium text-lg">🎤 Listening...</p>
+                  <p className="text-red-600 font-medium text-lg">Listening...</p>
                   <p className="text-xs text-red-400">Tap again to stop</p>
                 </div>
               ) : (
@@ -607,7 +511,11 @@ const GroceryNotes = () => {
               {currentNote.items.map((item, index) => (
                 <div 
                   key={item.id} 
-                  className="p-4 flex items-center justify-between group transition-all duration-300"
+                  className={`p-4 flex items-center justify-between group transition-all duration-300 ${
+                    swipedItemId === item.id ? 'bg-red-50 transform -translate-x-20' : ''
+                  }`}
+                  onTouchStart={(e) => handleTouchStart(e, item.id)}
+                  style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <div className="flex items-center space-x-3 flex-1">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-500 text-white">
@@ -620,12 +528,10 @@ const GroceryNotes = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <span className="font-bold text-gray-900 text-lg">₱{item.price.toFixed(2)}</span>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-2 transition-all duration-200"
-                    >
-                      🗑️
-                    </button>
+                    {/* Swipe hint */}
+                    <div className="text-xs text-gray-400 hidden sm:block">
+                      ← Swipe to delete
+                    </div>
                   </div>
                 </div>
               ))}
