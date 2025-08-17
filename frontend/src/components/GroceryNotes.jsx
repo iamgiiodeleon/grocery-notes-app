@@ -483,19 +483,21 @@ const GroceryNotes = () => {
         {/* Voice Recording */}
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg border border-white/20">
           <div className="text-center space-y-4">
-            <button
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 flex items-center justify-center ${
-                isRecording 
-                  ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 scale-110 shadow-2xl shadow-red-200' 
-                  : micPermission === 'denied'
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:bg-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
-              }`}
-              disabled={micPermission === 'denied'}
-            >
-              {isRecording ? <StopIcon className="w-8 h-8 text-white" /> : <MicrophoneIcon className="w-8 h-8 text-white" />}
-            </button>
+            <div className="flex justify-center">
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 flex items-center justify-center ${
+                  isRecording 
+                    ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 scale-110 shadow-2xl shadow-red-200' 
+                    : micPermission === 'denied'
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:bg-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
+                }`}
+                disabled={micPermission === 'denied'}
+              >
+                {isRecording ? <StopIcon className="w-8 h-8 text-white" /> : <MicrophoneIcon className="w-8 h-8 text-white" />}
+              </button>
+            </div>
             
             <div>
               {isRecording ? (
