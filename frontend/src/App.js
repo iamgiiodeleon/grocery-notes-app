@@ -1,7 +1,7 @@
 import React from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import GroceryNotes from "./components/GroceryNotes";
+import SimpleTest from "./components/SimpleTest";
 import { Toaster } from "./components/ui/toaster";
 
 function App() {
@@ -9,7 +9,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<GroceryNotes />} />
+          <Route path="/" element={<SimpleTest />} />
         </Routes>
       </BrowserRouter>
       <Toaster />
