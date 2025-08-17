@@ -14,17 +14,9 @@ const StopIcon = ({ className = "w-6 h-6" }) => (
   </svg>
 );
 
-const UserIcon = ({ className = "w-6 h-6" }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-  </svg>
-);
-
 const GroceryNotes = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [users, setUsers] = useState([]);
   const [notes, setNotes] = useState([]);
   const [currentNote, setCurrentNote] = useState(null);
   const [newNoteName, setNewNoteName] = useState('');
@@ -35,126 +27,27 @@ const GroceryNotes = () => {
   const [transcript, setTranscript] = useState('');
   const [swipedItemId, setSwipedItemId] = useState(null);
   const [micPermission, setMicPermission] = useState('unknown');
-  const [showUserSelector, setShowUserSelector] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
   const recognitionRef = useRef(null);
 
   useEffect(() => {
-    // Load users and current user from localStorage
+    // Load notes from localStorage
     try {
-      const savedUsers = localStorage.getItem('groceryNotesUsers');
-      const savedCurrentUser = localStorage.getItem('groceryNotesCurrentUser');
-      
-      if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers);
-        setUsers(parsedUsers);
-        
-        if (savedCurrentUser && parsedUsers.find(u => u.id === savedCurrentUser)) {
-          setCurrentUser(savedCurrentUser);
-        } else if (parsedUsers.length > 0) {
-          setCurrentUser(parsedUsers[0].id);
-        }
-      } else {
-        // Create default user if no users exist
-        const defaultUser = {
-          id: 'default',
-          name: 'Default User',
-          createdAt: new Date().toLocaleDateString()
-        };
-        setUsers([defaultUser]);
-        setCurrentUser(defaultUser.id);
+      const savedNotes = localStorage.getItem('groceryNotes');
+      if (savedNotes) {
+        setNotes(JSON.parse(savedNotes));
       }
-      
       setIsLoading(false);
     } catch (error) {
-      console.error("Error loading users:", error);
+      console.error("Error loading notes:", error);
       setHasError(true);
       setIsLoading(false);
     }
   }, []);
 
-  // Load notes for current user
+  // Save notes to localStorage whenever notes change
   useEffect(() => {
-    if (currentUser) {
-      try {
-        const savedNotes = localStorage.getItem(`groceryNotes_${currentUser}`);
-        if (savedNotes) {
-          setNotes(JSON.parse(savedNotes));
-        } else {
-          setNotes([]);
-        }
-      } catch (error) {
-        console.error("Error loading notes:", error);
-        setNotes([]);
-      }
-    }
-  }, [currentUser]);
-
-  // Save notes for current user
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(`groceryNotes_${currentUser}`, JSON.stringify(notes));
-    }
-  }, [notes, currentUser]);
-
-  // Save users
-  useEffect(() => {
-    localStorage.setItem('groceryNotesUsers', JSON.stringify(users));
-  }, [users]);
-
-  // Save current user
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('groceryNotesCurrentUser', currentUser);
-    }
-  }, [currentUser]);
-
-  // Click outside handler for user selector
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showUserSelector && !event.target.closest('.user-selector')) {
-        setShowUserSelector(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showUserSelector]);
-
-  const createUser = () => {
-    if (!newUserName.trim()) return;
-    
-    const newUser = {
-      id: Date.now().toString(),
-      name: newUserName.trim(),
-      createdAt: new Date().toLocaleDateString()
-    };
-    
-    setUsers(prev => [...prev, newUser]);
-    setCurrentUser(newUser.id);
-    setNewUserName('');
-    setShowUserSelector(false);
-  };
-
-  const switchUser = (userId) => {
-    setCurrentUser(userId);
-    setCurrentNote(null); // Clear current note when switching users
-    setShowUserSelector(false);
-  };
-
-  const deleteUser = (userId) => {
-    if (users.length <= 1) return; // Don't delete the last user
-    
-    if (currentUser === userId) {
-      const remainingUsers = users.filter(u => u.id !== userId);
-      setCurrentUser(remainingUsers[0].id);
-    }
-    
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    
-    // Remove user's data from localStorage
-    localStorage.removeItem(`groceryNotes_${userId}`);
-  };
+    localStorage.setItem('groceryNotes', JSON.stringify(notes));
+  }, [notes]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -237,19 +130,14 @@ const GroceryNotes = () => {
   }, []);
 
   const parseAndAddItem = (text) => {
-    if (!currentNote && notes.length === 0) {
-      return;
-    }
-
-    // If no current note is selected but we have notes, ask user to select one
-    if (!currentNote && notes.length > 0) {
+    if (!currentNote) {
       return;
     }
 
     console.log("Parsing text:", text);
     
-    // More flexible regex to catch different formats
-    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
+    // Simplified regex: only title + price, no extra characters
+    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)$/;
     const match = text.match(regex);
     
     if (match) {
@@ -483,84 +371,6 @@ const GroceryNotes = () => {
               Grocery Notes
             </h1>
             <p className="text-gray-600 text-sm">Voice-powered shopping lists</p>
-            
-            {/* User Selector */}
-            <div className="mt-4 user-selector">
-              <button
-                onClick={() => setShowUserSelector(!showUserSelector)}
-                className="inline-flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg border border-white/20 hover:bg-white/90 transition-all duration-200"
-              >
-                <UserIcon className="w-5 h-5 text-gray-600" />
-                <span className="text-gray-700 font-medium">
-                  {users.find(u => u.id === currentUser)?.name || 'Select User'}
-                </span>
-                <span className="text-gray-500">▼</span>
-              </button>
-              
-              {showUserSelector && (
-                <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/20 z-10 user-selector">
-                  <div className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Switch User</h3>
-                    
-                    {/* Current Users */}
-                    <div className="space-y-2 mb-4">
-                      {users.map(user => (
-                        <div key={user.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
-                          <div className="flex items-center space-x-2">
-                            <UserIcon className="w-4 h-4 text-gray-500" />
-                            <span className={`font-medium ${user.id === currentUser ? 'text-blue-600' : 'text-gray-700'}`}>
-                              {user.name}
-                            </span>
-                            {user.id === currentUser && (
-                              <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">Current</span>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            {user.id !== currentUser && (
-                              <button
-                                onClick={() => switchUser(user.id)}
-                                className="text-blue-600 hover:text-blue-700 text-sm px-2 py-1 rounded hover:bg-blue-50"
-                              >
-                                Switch
-                              </button>
-                            )}
-                            {users.length > 1 && (
-                              <button
-                                onClick={() => deleteUser(user.id)}
-                                className="text-red-500 hover:text-red-700 text-sm px-2 py-1 rounded hover:bg-red-50"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Create New User */}
-                    <div className="border-t pt-3">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Add New User</h4>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          placeholder="User name"
-                          value={newUserName}
-                          onChange={(e) => setNewUserName(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          onKeyPress={(e) => e.key === 'Enter' && createUser()}
-                        />
-                        <button
-                          onClick={createUser}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-sm transition-colors"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Create New Note */}
@@ -656,9 +466,7 @@ const GroceryNotes = () => {
             </button>
             <div className="text-center flex-1">
               <h1 className="text-xl font-semibold text-gray-900">{currentNote?.name}</h1>
-              <p className="text-sm text-gray-500">
-                {users.find(u => u.id === currentUser)?.name} • {currentNote?.items.length} items
-              </p>
+              <p className="text-sm text-gray-500">{currentNote?.items.length} items</p>
             </div>
             <div className="w-10" />
           </div>
@@ -677,12 +485,12 @@ const GroceryNotes = () => {
           <div className="text-center space-y-4">
             <button
               onClick={isRecording ? stopRecording : startRecording}
-              className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 ${
+              className={`w-20 h-20 rounded-full transition-all duration-300 transform hover:scale-110 flex items-center justify-center ${
                 isRecording 
                   ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 scale-110 shadow-2xl shadow-red-200' 
                   : micPermission === 'denied'
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
+                  : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:bg-blue-600 hover:to-indigo-700 shadow-2xl shadow-blue-200'
               }`}
               disabled={micPermission === 'denied'}
             >
@@ -717,7 +525,7 @@ const GroceryNotes = () => {
               }`}
               disabled={!transcript}
             >
-              {transcript ? `Add "${transcript}"` : 'Say item name and price'}
+              {transcript ? `Add "${transcript}"` : 'Say "item name price"'}
             </button>
 
             {/* Permission Request Button */}
