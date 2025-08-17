@@ -16,6 +16,35 @@ const GroceryNotes = () => {
   const recognitionRef = useRef(null);
   const { toast } = useToast();
 
+  // ===== Helpers =====
+  // Format "sugar 100" -> "Sugar 100"
+  const toTitleCase = (s = '') =>
+    s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
+  // Parse any "<words> <number>" style in any order; picks the LAST number in the string as price
+  const parseSpokenItem = (rawText) => {
+    if (!rawText) return null;
+    const text = rawText
+      .toLowerCase()
+      .replace(/\b(php|peso|pesos|piso)\b\.?/gi, '')
+      .trim();
+
+    // find all numeric tokens
+    const nums = [...text.matchAll(/(\d+(?:\.\d+)?)/g)];
+    if (nums.length === 0) {
+      return { name: text.trim(), price: 0 }; // fallback: no number spoken
+    }
+    const last = nums[nums.length - 1];
+    const price = parseFloat(last[1]);
+
+    // remove that number once from the string to get the name
+    const name = (text.slice(0, last.index) + text.slice(last.index + last[0].length))
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return { name: name || 'item', price: isNaN(price) ? 0 : price };
+  };
+
   // Load notes from localStorage on component mount
   useEffect(() => {
     const savedNotes = localStorage.getItem('groceryNotes');
@@ -42,14 +71,11 @@ const GroceryNotes = () => {
         const speechText = event.results[0][0].transcript.toLowerCase().trim();
         console.log("Speech recognized:", speechText);
         setTranscript(speechText);
-        
-        // Automatically parse and add the item when speech is recognized
-        parseAndAddItem(speechText);
-        
-        // Show processing message
+
+        // Show what we heard; user confirms via Add Item button
         toast({
-          title: "Processing...",
-          description: `Heard: "${speechText}"`,
+          title: "Heard",
+          description: `"${speechText}"`,
         });
       };
 
@@ -86,68 +112,51 @@ const GroceryNotes = () => {
       return;
     }
 
-    console.log("Parsing text:", text);
-    
-    // More flexible regex to catch different formats
-    const regex = /^(.+?)\s+(\d+(?:\.\d+)?)\s*(?:php|peso|pesos|piso)?$/i;
-    const match = text.match(regex);
-    
-    if (match) {
-      const itemName = match[1].trim();
-      const price = parseFloat(match[2]);
-      
-      console.log("Parsed item:", itemName, "Price:", price);
-      
-      const newItem = {
-        id: Date.now() + Math.random(), // Ensure unique ID
-        name: itemName,
-        price: price,
-        timestamp: new Date().toLocaleTimeString()
-      };
-      
-      console.log("Adding new item:", newItem);
-      
-      // Update notes state using callback to ensure we have latest state
-      setNotes(prevNotes => {
-        const updatedNotes = prevNotes.map(note => 
-          note.id === currentNote.id 
-            ? { 
-                ...note, 
-                items: [...(note.items || []), newItem], 
-                lastModified: new Date().toLocaleString() 
-              }
-            : note
-        );
-        
-        console.log("Updated notes array:", updatedNotes);
-        
-        // Also update current note immediately
-        const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
-        console.log("Updated current note:", updatedCurrentNote);
-        setCurrentNote(updatedCurrentNote);
-        
-        return updatedNotes;
-      });
-      
-      toast({
-        title: "Added ✅",
-        description: `${itemName} - ₱${price.toFixed(2)}`,
-      });
-      
-      // Force a re-render and keep transcript visible for manual button use
-      setTimeout(() => {
-        // Don't clear transcript immediately so user can see it and use test button
-        // setTranscript('');
-      }, 2000);
-      
-    } else {
-      console.log("Failed to parse:", text, "Regex match:", match);
+    const parsed = parseSpokenItem(text);
+    if (!parsed) {
       toast({
         title: "Not Recognized",
         description: `Heard: "${text}". Try "item name price" format.`,
         variant: "destructive"
       });
+      return;
     }
+
+    const { name: itemName, price } = parsed;
+    console.log("Parsed item:", itemName, "Price:", price);
+
+    const newItem = {
+      id: Date.now() + Math.random(), // Ensure unique ID
+      name: itemName,
+      price: price,
+      timestamp: new Date().toLocaleTimeString()
+    };
+
+    // Update notes state using callback to ensure we have latest state
+    setNotes(prevNotes => {
+      const updatedNotes = prevNotes.map(note =>
+        note.id === currentNote.id
+          ? {
+              ...note,
+              items: [...(note.items || []), newItem],
+              lastModified: new Date().toLocaleString()
+            }
+          : note
+      );
+
+      // Also update current note immediately
+      const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
+      setCurrentNote(updatedCurrentNote);
+
+      return updatedNotes;
+    });
+
+    toast({
+      title: "Added ✅",
+      description: `${toTitleCase(itemName)} - ₱${Number(price || 0).toFixed(2)}`,
+    });
+
+    // Keep transcript visible; user can edit or add again if needed.
   };
 
   const createNewNote = () => {
@@ -216,18 +225,18 @@ const GroceryNotes = () => {
   };
 
   const removeItem = (itemId) => {
-    const updatedNotes = notes.map(note => 
-      note.id === currentNote.id 
+    const updatedNotes = notes.map(note =>
+      note.id === currentNote.id
         ? { ...note, items: note.items.filter(item => item.id !== itemId), lastModified: new Date().toLocaleString() }
         : note
     );
-    
+
     setNotes(updatedNotes);
 
     // Update current note to match
     const updatedCurrentNote = updatedNotes.find(note => note.id === currentNote.id);
     setCurrentNote(updatedCurrentNote);
-    
+
     toast({
       title: "Removed",
       description: "Item deleted from list",
@@ -235,7 +244,7 @@ const GroceryNotes = () => {
   };
 
   const getTotalPrice = (items) => {
-    return items.reduce((sum, item) => sum + item.price, 0);
+    return items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
   };
 
   if (currentView === 'notes') {
@@ -257,9 +266,9 @@ const GroceryNotes = () => {
                 value={newNoteName}
                 onChange={(e) => setNewNoteName(e.target.value)}
                 className="rounded-xl border-gray-200 bg-gray-50"
-                onKeyPress={(e) => e.key === 'Enter' && createNewNote()}
+                onKeyDown={(e) => e.key === 'Enter' && createNewNote()}
               />
-              <Button 
+              <Button
                 onClick={createNewNote}
                 className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 h-12"
               >
@@ -280,7 +289,7 @@ const GroceryNotes = () => {
             ) : (
               notes.map((note) => (
                 <div key={note.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                  <div 
+                  <div
                     className="p-6 cursor-pointer active:bg-gray-50 transition-colors"
                     onClick={() => openNote(note)}
                   >
@@ -327,7 +336,7 @@ const GroceryNotes = () => {
     );
   }
 
-  // Recording View
+  // ===== Recording View =====
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto space-y-4">
@@ -362,8 +371,8 @@ const GroceryNotes = () => {
             <Button
               size="lg"
               className={`w-20 h-20 rounded-full transition-all duration-200 ${
-                isRecording 
-                  ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-200' 
+                isRecording
+                  ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-lg shadow-red-200'
                   : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-200'
               }`}
               onClick={isRecording ? stopRecording : startRecording}
@@ -374,7 +383,7 @@ const GroceryNotes = () => {
                 <Mic className="h-8 w-8" />
               )}
             </Button>
-            
+
             <div>
               {isRecording ? (
                 <div className="space-y-1">
@@ -393,11 +402,24 @@ const GroceryNotes = () => {
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
                 <p className="text-xs text-blue-600 mb-1">You said:</p>
                 <p className="text-sm font-medium text-blue-800">"{transcript}"</p>
-                <p className="text-xs text-blue-500 mt-1">Click test button to add this item</p>
+                <p className="text-xs text-blue-500 mt-1">Confirm to add this item</p>
               </div>
             )}
 
-            {/* Test button for debugging */}
+            {/* The main Add Item button (label mirrors what you said) */}
+            {transcript && (
+              <Button
+                onClick={() => parseAndAddItem(transcript)}
+                className="w-full rounded-xl bg-green-600 hover:bg-green-700 h-12"
+                disabled={!currentNote}
+                title="Add the recognized item to the list"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                {toTitleCase(transcript)}
+              </Button>
+            )}
+
+            {/* Dev-only test button (optional) */}
             {process.env.NODE_ENV === 'development' && (
               <Button
                 variant="outline"
@@ -434,7 +456,7 @@ const GroceryNotes = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <span className="font-semibold text-gray-900">₱{item.price.toFixed(2)}</span>
+                    <span className="font-semibold text-gray-900">₱{Number(item.price).toFixed(2)}</span>
                     {/* Easy remove button - always visible */}
                     <Button
                       variant="ghost"
@@ -464,7 +486,7 @@ const GroceryNotes = () => {
             {currentNote?.items?.length > 0 && (
               <div>
                 <p><strong>Items:</strong></p>
-                {currentNote.items.map((item, idx) => (
+                {currentNote.items.map((item) => (
                   <p key={item.id}>• {item.name} - ₱{item.price}</p>
                 ))}
               </div>
