@@ -17,16 +17,30 @@ const GroceryNotes = () => {
   const [manualItemName, setManualItemName] = useState('');
   const [manualItemPrice, setManualItemPrice] = useState('');
   const [swipedItemId, setSwipedItemId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const recognitionRef = useRef(null);
   const { toast } = useToast();
 
   // Load notes from localStorage on component mount
   useEffect(() => {
-    const savedNotes = localStorage.getItem('groceryNotes');
-    if (savedNotes) {
-      setNotes(JSON.parse(savedNotes));
+    try {
+      const savedNotes = localStorage.getItem('groceryNotes');
+      if (savedNotes) {
+        setNotes(JSON.parse(savedNotes));
+      }
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error loading notes:", error);
+      setHasError(true);
+      setIsLoading(false);
+      toast({
+        title: "Error Loading Data",
+        description: "Could not load saved notes. Starting fresh.",
+        variant: "destructive"
+      });
     }
-  }, []);
+  }, [toast]);
 
   // Save notes to localStorage whenever notes change
   useEffect(() => {
@@ -35,41 +49,58 @@ const GroceryNotes = () => {
 
   // Initialize speech recognition
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
+    try {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onresult = (event) => {
-        const speechText = event.results[0][0].transcript.toLowerCase().trim();
-        console.log("Speech recognized:", speechText);
-        setTranscript(speechText);
-        
-        // Automatically parse and add the item when speech is recognized
-        parseAndAddItem(speechText);
-        
-        // Show processing message
+        recognitionRef.current.onresult = (event) => {
+          const speechText = event.results[0][0].transcript.toLowerCase().trim();
+          console.log("Speech recognized:", speechText);
+          setTranscript(speechText);
+          
+          // Automatically parse and add the item when speech is recognized
+          parseAndAddItem(speechText);
+          
+          // Show processing message
+          toast({
+            title: "Processing...",
+            description: `Heard: "${speechText}"`,
+          });
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsRecording(false);
+        };
+
+        recognitionRef.current.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+          toast({
+            title: "Error",
+            description: "Speech recognition failed. Please try again.",
+            variant: "destructive"
+          });
+        };
+      } else {
+        console.log("Speech recognition not supported in this browser");
+        // Show a toast to inform user
         toast({
-          title: "Processing...",
-          description: `Heard: "${speechText}"`,
-        });
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-        toast({
-          title: "Error",
-          description: "Speech recognition failed. Please try again.",
+          title: "Speech Recognition Unavailable",
+          description: "Voice features not supported in this browser. You can still add items manually.",
           variant: "destructive"
         });
-      };
+      }
+    } catch (error) {
+      console.error("Error initializing speech recognition:", error);
+      toast({
+        title: "Initialization Error",
+        description: "Some features may not work properly. You can still add items manually.",
+        variant: "destructive"
+      });
     }
 
     return () => {
@@ -324,6 +355,38 @@ const GroceryNotes = () => {
     document.addEventListener('touchmove', handleTouchMove);
     document.addEventListener('touchend', handleTouchEnd);
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="text-center animate-fade-in">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading Grocery Notes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
+        <div className="text-center animate-fade-in">
+          <div className="bg-red-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">⚠️</span>
+          </div>
+          <p className="text-gray-600 mb-4">Something went wrong</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-500 hover:bg-blue-600"
+          >
+            Reload App
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentView === 'notes') {
     return (
