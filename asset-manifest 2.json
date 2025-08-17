@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/grocery-notes-app/static/css/main.9f565b0c.css",
+    "main.js": "/grocery-notes-app/static/js/main.77baacb5.js",
+    "index.html": "/grocery-notes-app/index.html",
+    "main.9f565b0c.css.map": "/grocery-notes-app/static/css/main.9f565b0c.css.map",
+    "main.77baacb5.js.map": "/grocery-notes-app/static/js/main.77baacb5.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.9f565b0c.css",
+    "static/js/main.77baacb5.js"
+  ]
+}
